@@ -20,6 +20,19 @@ export default function Analytics() {
   const [loadingReleases, setLoadingReleases] = useState(false);
   const [error, setError] = useState(null);
   
+  // Report state
+  const [reportData, setReportData] = useState({
+    lastRefresh: null,
+    unmappedUserStories: [],
+    unmappedTestCases: [],
+    countNullValues: [],
+    noStepsExpectedResults: [],
+    emptyTestSteps: [],
+    emptyExpectedResults: []
+  });
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
+  
   // Notifications state
   const [notifications, setNotifications] = useState([
     {
@@ -97,30 +110,164 @@ export default function Analytics() {
     setSelectedRelease(release);
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (selectedProject && selectedRelease) {
-      // Add notification for successful report generation
-      const newNotification = {
-        id: Date.now(),
-        title: "Report Generation Started",
-        message: `Generating report for ${selectedProject.name} - ${selectedRelease.name}`,
-        date: new Date().toLocaleString(),
-        read: false,
-        type: "success"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
+      setLoadingReport(true);
+      setError(null);
       
-      console.log('Generating report for:', {
-        project: selectedProject,
-        release: selectedRelease
-      });
+      try {
+        const projectId = selectedProject.id;
+        const releaseId = selectedRelease.id;
+        
+        // Call all APIs simultaneously
+        const [
+          latestReportResponse,
+          unmappedUserStoriesResponse,
+          unmappedTestCasesResponse,
+          countNullValuesResponse,
+          noStepsExpectedResultsResponse,
+          emptyTestStepsResponse,
+          emptyExpectedResultsResponse
+        ] = await Promise.all([
+          fetch(`/api/zephyr-data/latest-report/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/count-null-values/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/no-steps-expected-results/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/empty-test-steps/${projectId}/${releaseId}`),
+          fetch(`/api/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
+        ]);
+
+        // Parse responses
+        const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
+        const unmappedUserStories = unmappedUserStoriesResponse.ok ? await unmappedUserStoriesResponse.json() : [];
+        const unmappedTestCases = unmappedTestCasesResponse.ok ? await unmappedTestCasesResponse.json() : [];
+        const countNullValues = countNullValuesResponse.ok ? await countNullValuesResponse.json() : [];
+        const noStepsExpectedResults = noStepsExpectedResultsResponse.ok ? await noStepsExpectedResultsResponse.json() : [];
+        const emptyTestSteps = emptyTestStepsResponse.ok ? await emptyTestStepsResponse.json() : [];
+        const emptyExpectedResults = emptyExpectedResultsResponse.ok ? await emptyExpectedResultsResponse.json() : [];
+
+        // Update state
+        setReportData({
+          lastRefresh: latestReport?.created_at || null,
+          unmappedUserStories: unmappedUserStories || [],
+          unmappedTestCases: unmappedTestCases || [],
+          countNullValues: countNullValues || [],
+          noStepsExpectedResults: noStepsExpectedResults || [],
+          emptyTestSteps: emptyTestSteps || [],
+          emptyExpectedResults: emptyExpectedResults || []
+        });
+
+        setReportGenerated(true);
+
+        // Add notification for successful report generation
+        const newNotification = {
+          id: Date.now(),
+          title: "Analytics Report Generated",
+          message: `Successfully generated report for ${selectedProject.name} - ${selectedRelease.name}`,
+          date: new Date().toLocaleString(),
+          read: false,
+          type: "success"
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+        
+      } catch (err) {
+        setError('Failed to generate report. Please try again.');
+        console.error('Error generating report:', err);
+      } finally {
+        setLoadingReport(false);
+      }
     }
+  };
+
+  // Format date function
+  const formatDateTime = (dateString) => {
+    if (!dateString) return null;
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (err) {
+      return dateString;
+    }
+  };
+
+  // Data Table Component
+  const DataTable = ({ title, data, loading, icon }) => {
+    if (!data || data.length === 0) {
+      return (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <span className="mr-3 text-2xl">{icon}</span>
+            {title}
+          </h3>
+          <div className="text-center py-8">
+            <div className="text-gray-400 text-4xl mb-2">📊</div>
+            <p className="text-gray-500">No data available</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Get column headers from the first object
+    const columns = Object.keys(data[0] || {});
+
+    return (
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <span className="mr-3 text-2xl">{icon}</span>
+          {title}
+          <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+            {data.length} records
+          </span>
+        </h3>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {columns.map((column, index) => (
+                  <th
+                    key={index}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {column.replace(/_/g, ' ')}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {data.map((row, rowIndex) => (
+                <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
+                  {columns.map((column, colIndex) => (
+                    <td
+                      key={colIndex}
+                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                    >
+                      {row[column] !== null && row[column] !== undefined 
+                        ? String(row[column]) 
+                        : '-'
+                      }
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   // Check if generate button should be enabled
   const isGenerateEnabled = selectedProject && selectedRelease;
-
-  // Notification management
   const handleNotificationClick = () => {
     setShowNotifications(!showNotifications);
     setShowProfileMenu(false);
@@ -503,50 +650,81 @@ export default function Analytics() {
             <div className="text-center">
               <button
                 onClick={handleGenerateReport}
-                disabled={!isGenerateEnabled}
+                disabled={!isGenerateEnabled || loadingReport}
                 className={`px-8 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform ${
-                  isGenerateEnabled
+                  isGenerateEnabled && !loadingReport
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:scale-105 hover:shadow-lg cursor-pointer'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 } shadow-md`}
               >
-                <span className="mr-3">📈</span>
-                Generate Analytics Report
+                {loadingReport ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-3"></div>
+                    Generating Report...
+                  </div>
+                ) : (
+                  <>
+                    <span className="mr-3">📈</span>
+                    Generate Analytics Report
+                  </>
+                )}
               </button>
+
+              {/* Last Refresh Message */}
+              {reportData.lastRefresh && !loadingReport && (
+                <div className="mt-4 text-sm text-gray-600 bg-green-50 border border-green-200 rounded-lg p-3 inline-block">
+                  <span className="mr-2">🕒</span>
+                  Last report refreshed: {formatDateTime(reportData.lastRefresh)}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Selection Summary */}
-          {(selectedProject || selectedRelease) && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <span className="mr-2">📋</span>
-                Current Selection
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="flex items-center">
-                    <span className="text-2xl mr-3">🏢</span>
-                    <div>
-                      <p className="text-sm font-medium text-blue-600">Project</p>
-                      <p className="text-lg font-bold text-blue-900">
-                        {selectedProject ? selectedProject.name : 'Not selected'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="flex items-center">
-                    <span className="text-2xl mr-3">🚀</span>
-                    <div>
-                      <p className="text-sm font-medium text-green-600">Release</p>
-                      <p className="text-lg font-bold text-green-900">
-                        {selectedRelease ? selectedRelease.name : 'Not selected'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+          {/* Reports Section */}
+          {reportGenerated && (
+            <div className="space-y-6">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">📊 Analytics Reports</h2>
+                <p className="text-lg text-gray-600">
+                  Comprehensive analysis for {selectedProject?.name} - {selectedRelease?.name}
+                </p>
               </div>
+
+              <DataTable
+                title="Unmapped User Stories"
+                data={reportData.unmappedUserStories}
+                icon="📋"
+              />
+
+              <DataTable
+                title="Unmapped Test Cases"
+                data={reportData.unmappedTestCases}
+                icon="🧪"
+              />
+
+              <DataTable
+                title="Count Null Values"
+                data={reportData.countNullValues}
+                icon="🔍"
+              />
+
+              <DataTable
+                title="No Steps Expected Results"
+                data={reportData.noStepsExpectedResults}
+                icon="⚠️"
+              />
+
+              <DataTable
+                title="Empty Test Steps"
+                data={reportData.emptyTestSteps}
+                icon="📝"
+              />
+
+              <DataTable
+                title="Empty Expected Results"
+                data={reportData.emptyExpectedResults}
+                icon="❌"
+              />
             </div>
           )}
         </div>
