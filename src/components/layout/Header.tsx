@@ -16,6 +16,18 @@ const Header: React.FC<HeaderProps> = ({ customer, alerts, className = '' }) => 
   const [currentStatus, setCurrentStatus] = useState<'Available' | 'Away' | 'DND' | 'Offline'>('Available');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Extract user name and generate initials
+  const userName = "Anuraag Sakxena"; // This could come from props or context in real app
+  const getInitials = (name: string) => {
+    const names = name.trim().split(' ');
+    if (names.length >= 2) {
+      return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
+    }
+    return name.charAt(0).toUpperCase();
+  };
+
+  const userInitials = getInitials(userName);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -143,14 +155,9 @@ const Header: React.FC<HeaderProps> = ({ customer, alerts, className = '' }) => 
               className="flex items-center hover:bg-gray-50 rounded-full p-1 transition-colors"
             >
               <div className="relative">
-                <div className="w-8 h-8 rounded-full overflow-hidden">
-                  <Image
-                    src="/images/profile-photo.jpg"
-                    alt="Profile"
-                    width={32}
-                    height={32}
-                    className="w-full h-full object-cover"
-                  />
+                {/* Initials Avatar */}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold text-sm shadow-md">
+                  {userInitials}
                 </div>
                 {/* Status indicator */}
                 <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${getCurrentStatusColor()} rounded-full border-2 border-white`}></div>
@@ -160,15 +167,28 @@ const Header: React.FC<HeaderProps> = ({ customer, alerts, className = '' }) => 
             {/* Dropdown Menu */}
             {isProfileDropdownOpen && (
               <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                {/* User Info Section */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
+                      {userInitials}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-700">{userName}</div>
+                      <div className="text-xs text-gray-500">Agent ID: A12345</div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Status Section */}
                 <div className="px-4 py-2 border-b border-gray-100">
-                  <div className="text-base font-semibold text-gray-700 mb-2">Set Status</div>
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Set Status</div>
                   <div className="space-y-1">
                     {statusOptions.map((status) => (
                       <button
                         key={status.label}
                         onClick={() => handleStatusChange(status.label as any)}
-                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-base transition-colors ${
+                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
                           currentStatus === status.label 
                             ? 'bg-blue-50 text-blue-700' 
                             : 'hover:bg-gray-50 text-gray-700'
@@ -186,11 +206,11 @@ const Header: React.FC<HeaderProps> = ({ customer, alerts, className = '' }) => 
 
                 {/* Menu Items */}
                 <div className="py-1">
-                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-base text-gray-700 hover:bg-gray-50 transition-colors">
+                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                     <Settings className="w-4 h-4" />
                     <span>Settings</span>
                   </button>
-                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-base text-red-600 hover:bg-red-50 transition-colors">
+                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
                     <LogOut className="w-4 h-4" />
                     <span>Log Out</span>
                   </button>
