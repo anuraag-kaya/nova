@@ -3,7 +3,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, MoreHorizontal, Volume2, VolumeX } from 'lucide-react';
 
 export interface CallPanelProps {
@@ -34,6 +33,17 @@ const CallPanel: React.FC<CallPanelProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Generate initials from caller name
+  const getInitials = (name: string) => {
+    const names = name.trim().split(' ');
+    if (names.length >= 2) {
+      return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
+    }
+    return name.charAt(0).toUpperCase();
+  };
+
+  const callerInitials = getInitials(callerName);
 
   // Update call duration
   useEffect(() => {
@@ -96,23 +106,13 @@ const CallPanel: React.FC<CallPanelProps> = ({
             
             {/* Left Section - Caller Profile */}
             <div className="flex items-center space-x-6">
-              {/* Enhanced Profile Picture */}
+              {/* Enhanced Profile with Initials */}
               <div className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full blur-md opacity-40 group-hover:opacity-60 transition-opacity duration-300"></div>
                 <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-white/20 shadow-lg">
-                  {callerImage ? (
-                    <Image
-                      src={callerImage}
-                      alt={callerName}
-                      width={64}
-                      height={64}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
-                      {callerName.charAt(0)}
-                    </div>
-                  )}
+                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-inner">
+                    {callerInitials}
+                  </div>
                 </div>
                 {/* Status indicator */}
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-3 border-gray-900 shadow-lg animate-pulse"></div>
