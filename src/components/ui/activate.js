@@ -33,6 +33,18 @@ export default function Analytics() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
   
+  // Tab and pagination state
+  const [activeTab, setActiveTab] = useState('unmappedUserStories');
+  const [currentPages, setCurrentPages] = useState({
+    unmappedUserStories: 1,
+    unmappedTestCases: 1,
+    countNullValues: 1,
+    noStepsExpectedResults: 1,
+    emptyTestSteps: 1,
+    emptyExpectedResults: 1
+  });
+  const recordsPerPage = 25;
+  
   // Notifications state
   const [notifications, setNotifications] = useState([
     {
@@ -45,6 +57,16 @@ export default function Analytics() {
     }
   ]);
   const [unreadNotifications, setUnreadNotifications] = useState(1);
+
+  // Tab configuration
+  const tabs = [
+    { id: 'unmappedUserStories', label: 'Unmapped User Stories', icon: '📋' },
+    { id: 'unmappedTestCases', label: 'Unmapped Test Cases', icon: '🧪' },
+    { id: 'countNullValues', label: 'Count Null Values', icon: '🔍' },
+    { id: 'noStepsExpectedResults', label: 'No Steps Expected Results', icon: '⚠️' },
+    { id: 'emptyTestSteps', label: 'Empty Test Steps', icon: '📝' },
+    { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌' }
+  ];
 
   // Update unread count whenever notifications change
   useEffect(() => {
@@ -98,8 +120,8 @@ export default function Analytics() {
 
   const handleProjectSelect = (project) => {
     setSelectedProject(project);
-    setSelectedRelease(null); // Reset release selection
-    setReleases([]); // Clear previous releases
+    setSelectedRelease(null);
+    setReleases([]);
     
     if (project) {
       fetchReleases(project.id);
@@ -180,6 +202,23 @@ export default function Analytics() {
     }
   };
 
+  // Pagination functions
+  const getCurrentPageData = (data, page) => {
+    const startIndex = (page - 1) * recordsPerPage;
+    return data.slice(startIndex, startIndex + recordsPerPage);
+  };
+
+  const getTotalPages = (data) => {
+    return Math.ceil(data.length / recordsPerPage);
+  };
+
+  const handlePageChange = (tabId, newPage) => {
+    setCurrentPages(prev => ({
+      ...prev,
+      [tabId]: newPage
+    }));
+  };
+
   // Format date function
   const formatDateTime = (dateString) => {
     if (!dateString) return null;
@@ -199,36 +238,134 @@ export default function Analytics() {
     }
   };
 
-  // Data Table Component
-  const DataTable = ({ title, data, loading, icon }) => {
+  // Pagination Component
+  const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
+    if (totalPages <= 1) return null;
+
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisiblePages = 5;
+      
+      if (totalPages <= maxVisiblePages) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (currentPage <= 3) {
+          for (let i = 1; i <= 4; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = totalPages - 3; i <= totalPages; i++) {
+            pages.push(i);
+          }
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(totalPages);
+        }
+      }
+      
+      return pages;
+    };
+
+    return (
+      <div className="flex items-center justify-between mt-6 px-4 py-3 bg-gray-50 border-t">
+        <div className="flex items-center text-sm text-gray-700">
+          <span>
+            Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalPages * recordsPerPage)} of {totalPages * recordsPerPage} entries
+          </span>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-3 py-2 text-sm font-medium rounded-md ${
+              currentPage === 1
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50'
+            }`}
+          >
+            Previous
+          </button>
+          
+          {getPageNumbers().map((page, index) => (
+            <button
+              key={index}
+              onClick={() => typeof page === 'number' && onPageChange(page)}
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                page === currentPage
+                  ? 'bg-blue-600 text-white'
+                  : typeof page === 'number'
+                    ? 'text-gray-700 hover:text-blue-600 hover:bg-blue-50'
+                    : 'text-gray-400 cursor-default'
+              }`}
+              disabled={typeof page !== 'number'}
+            >
+              {page}
+            </button>
+          ))}
+          
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`px-3 py-2 text-sm font-medium rounded-md ${
+              currentPage === totalPages
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Enhanced Data Table Component with Pagination
+  const DataTable = ({ data, tabId }) => {
+    const currentPage = currentPages[tabId];
+    const totalPages = getTotalPages(data);
+    const currentData = getCurrentPageData(data, currentPage);
+
     if (!data || data.length === 0) {
       return (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <span className="mr-3 text-2xl">{icon}</span>
-            {title}
-          </h3>
-          <div className="text-center py-8">
-            <div className="text-gray-400 text-4xl mb-2">📊</div>
-            <p className="text-gray-500">No data available</p>
+        <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <div className="text-center">
+            <div className="text-gray-400 text-6xl mb-4">📊</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+            <p className="text-gray-500">No records found for this report.</p>
           </div>
         </div>
       );
     }
 
-    // Get column headers from the first object
     const columns = Object.keys(data[0] || {});
 
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <span className="mr-3 text-2xl">{icon}</span>
-          {title}
-          <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
-            {data.length} records
-          </span>
-        </h3>
-        
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        {/* Table Header */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {tabs.find(tab => tab.id === tabId)?.label || 'Report'}
+            </h3>
+            <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+              {data.length} total records
+            </span>
+          </div>
+        </div>
+
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -244,7 +381,7 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {data.map((row, rowIndex) => (
+              {currentData.map((row, rowIndex) => (
                 <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
                   {columns.map((column, colIndex) => (
                     <td
@@ -262,12 +399,20 @@ export default function Analytics() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={(newPage) => handlePageChange(tabId, newPage)}
+        />
       </div>
     );
   };
 
   // Check if generate button should be enabled
   const isGenerateEnabled = selectedProject && selectedRelease;
+  
   const handleNotificationClick = () => {
     setShowNotifications(!showNotifications);
     setShowProfileMenu(false);
@@ -307,25 +452,24 @@ export default function Analytics() {
 
     return (
       <div className="relative">
-        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
-          <span className="mr-2 text-lg">{icon}</span>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
         </label>
         <div className="relative">
           <button
             type="button"
-            className={`w-full px-4 py-3 text-left bg-white border-2 rounded-xl shadow-sm transition-all duration-300 ${
+            className={`w-full px-4 py-2 text-left bg-white border rounded-lg shadow-sm transition-all ${
               disabled 
                 ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed' 
                 : isOpen
-                  ? 'border-blue-500 ring-4 ring-blue-100 shadow-lg'
-                  : 'border-gray-300 hover:border-blue-400 hover:shadow-md'
-            } focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500`}
+                  ? 'border-blue-500 ring-2 ring-blue-100'
+                  : 'border-gray-300 hover:border-blue-400'
+            }`}
             onClick={() => !disabled && setIsOpen(!isOpen)}
             disabled={disabled || loading}
           >
             <div className="flex items-center justify-between">
-              <span className={`block truncate ${selected ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+              <span className={`block truncate ${selected ? 'text-gray-900' : 'text-gray-500'}`}>
                 {loading ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent mr-2"></div>
@@ -336,7 +480,7 @@ export default function Analytics() {
                 )}
               </span>
               <svg 
-                className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+                className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -347,7 +491,7 @@ export default function Analytics() {
           </button>
 
           {isOpen && !disabled && !loading && (
-            <div className="absolute z-20 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-auto">
+            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
               {options.length === 0 ? (
                 <div className="px-4 py-3 text-gray-500 text-center">
                   No options available
@@ -357,9 +501,9 @@ export default function Analytics() {
                   <button
                     key={option.id || index}
                     type="button"
-                    className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors duration-150 ${
-                      selected?.id === option.id ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'
-                    } ${index === 0 ? 'rounded-t-xl' : ''} ${index === options.length - 1 ? 'rounded-b-xl' : ''}`}
+                    className={`w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors ${
+                      selected?.id === option.id ? 'bg-blue-100 text-blue-900' : 'text-gray-900'
+                    }`}
                     onClick={() => {
                       onSelect(option);
                       setIsOpen(false);
@@ -593,142 +737,132 @@ export default function Analytics() {
         />
       )}
 
-      {/* Main Content */}
-      <div className="flex-grow bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Page Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              📊 Analytics & Reporting
-            </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Generate comprehensive reports by selecting your project and release. 
-              Our advanced analytics provide deep insights into your development workflow.
-            </p>
+      {/* Control Bar - Horizontal Layout */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-end gap-6">
+          {/* Project Dropdown */}
+          <div className="flex-1 max-w-xs">
+            <CustomDropdown
+              label="Select Project"
+              options={projects}
+              selected={selectedProject}
+              onSelect={handleProjectSelect}
+              disabled={false}
+              loading={loadingProjects}
+              placeholder="Choose a project..."
+            />
           </div>
 
-          {/* Main Card */}
-          <div className="bg-white rounded-2xl shadow-2xl p-8 mb-8 border border-gray-100">
-            {/* Error Display */}
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center">
-                <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-red-700 font-medium">{error}</span>
-              </div>
-            )}
+          {/* Release Dropdown */}
+          <div className="flex-1 max-w-xs">
+            <CustomDropdown
+              label="Select Release"
+              options={releases}
+              selected={selectedRelease}
+              onSelect={handleReleaseSelect}
+              disabled={!selectedProject}
+              loading={loadingReleases}
+              placeholder={selectedProject ? "Choose a release..." : "Select a project first"}
+            />
+          </div>
 
-            {/* Selection Form */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Projects Dropdown */}
-              <CustomDropdown
-                label="Select Project"
-                icon="🏢"
-                options={projects}
-                selected={selectedProject}
-                onSelect={handleProjectSelect}
-                disabled={false}
-                loading={loadingProjects}
-                placeholder="Choose a project to begin..."
-              />
-
-              {/* Releases Dropdown */}
-              <CustomDropdown
-                label="Select Release"
-                icon="🚀"
-                options={releases}
-                selected={selectedRelease}
-                onSelect={handleReleaseSelect}
-                disabled={!selectedProject}
-                loading={loadingReleases}
-                placeholder={selectedProject ? "Choose a release..." : "Select a project first"}
-              />
-            </div>
-
-            {/* Generate Report Button */}
-            <div className="text-center">
-              <button
-                onClick={handleGenerateReport}
-                disabled={!isGenerateEnabled || loadingReport}
-                className={`px-8 py-4 rounded-xl font-bold text-lg transition-all duration-300 transform ${
-                  isGenerateEnabled && !loadingReport
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:scale-105 hover:shadow-lg cursor-pointer'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                } shadow-md`}
-              >
-                {loadingReport ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-3"></div>
-                    Generating Report...
-                  </div>
-                ) : (
-                  <>
-                    <span className="mr-3">📈</span>
-                    Generate Analytics Report
-                  </>
-                )}
-              </button>
-
-              {/* Last Refresh Message */}
-              {reportData.lastRefresh && !loadingReport && (
-                <div className="mt-4 text-sm text-gray-600 bg-green-50 border border-green-200 rounded-lg p-3 inline-block">
-                  <span className="mr-2">🕒</span>
-                  Last report refreshed: {formatDateTime(reportData.lastRefresh)}
+          {/* Generate Button */}
+          <div className="flex flex-col">
+            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+              Action
+            </label>
+            <button
+              onClick={handleGenerateReport}
+              disabled={!isGenerateEnabled || loadingReport}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                isGenerateEnabled && !loadingReport
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {loadingReport ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Generating...
                 </div>
+              ) : (
+                'Generate Report'
               )}
-            </div>
+            </button>
           </div>
 
-          {/* Reports Section */}
-          {reportGenerated && (
-            <div className="space-y-6">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">📊 Analytics Reports</h2>
-                <p className="text-lg text-gray-600">
-                  Comprehensive analysis for {selectedProject?.name} - {selectedRelease?.name}
-                </p>
+          {/* Last Refresh Info */}
+          {reportData.lastRefresh && !loadingReport && (
+            <div className="flex flex-col justify-end">
+              <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2">
+                <span className="mr-1">🕒</span>
+                Last refreshed: {formatDateTime(reportData.lastRefresh)}
               </div>
-
-              <DataTable
-                title="Unmapped User Stories"
-                data={reportData.unmappedUserStories}
-                icon="📋"
-              />
-
-              <DataTable
-                title="Unmapped Test Cases"
-                data={reportData.unmappedTestCases}
-                icon="🧪"
-              />
-
-              <DataTable
-                title="Count Null Values"
-                data={reportData.countNullValues}
-                icon="🔍"
-              />
-
-              <DataTable
-                title="No Steps Expected Results"
-                data={reportData.noStepsExpectedResults}
-                icon="⚠️"
-              />
-
-              <DataTable
-                title="Empty Test Steps"
-                data={reportData.emptyTestSteps}
-                icon="📝"
-              />
-
-              <DataTable
-                title="Empty Expected Results"
-                data={reportData.emptyExpectedResults}
-                icon="❌"
-              />
             </div>
           )}
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+            <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-red-700 font-medium">{error}</span>
+          </div>
+        )}
       </div>
+
+      {/* Main Content - Reports with Tabs */}
+      {reportGenerated && (
+        <div className="flex-1 bg-gray-50">
+          {/* Tab Navigation */}
+          <div className="bg-white border-b border-gray-200">
+            <div className="px-6">
+              <nav className="flex space-x-8 overflow-x-auto">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="mr-2 text-lg">{tab.icon}</span>
+                    {tab.label}
+                    <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                      {reportData[tab.id]?.length || 0}
+                    </span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            <DataTable 
+              data={reportData[activeTab]} 
+              tabId={activeTab}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Empty State when no report generated */}
+      {!reportGenerated && (
+        <div className="flex-1 bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-gray-400 text-8xl mb-6">📊</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
+            <p className="text-lg text-gray-600 max-w-md mx-auto">
+              Select a project and release from the controls above, then click "Generate Report" to view comprehensive analytics.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="w-full bg-[#222222] text-white text-center p-2 flex justify-between items-center border-t border-gray-800">
