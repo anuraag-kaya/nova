@@ -30,9 +30,10 @@ export default function Analytics() {
     emptyTestSteps: [],
     emptyExpectedResults: []
   });
-  const [loadingReport, setLoadingReport] = useState(false);
+  const [loadingGenerateReport, setLoadingGenerateReport] = useState(false);
+  const [loadingViewReport, setLoadingViewReport] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
-const [latestReportFetched, setLatestReportFetched] = useState(false);
+  const [reportViewed, setReportViewed] = useState(false);
   
   // Tab and pagination state
   const [activeTab, setActiveTab] = useState('unmappedUserStories');
@@ -69,6 +70,12 @@ const [latestReportFetched, setLatestReportFetched] = useState(false);
     { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌' }
   ];
 
+  // Button enable states
+  const isProjectSelected = !!selectedProject;
+  const isReleaseSelected = !!selectedRelease;
+  const isGenerateReportEnabled = isProjectSelected && isReleaseSelected && !loadingGenerateReport && !loadingViewReport;
+  const isViewReportEnabled = reportGenerated && !loadingGenerateReport && !loadingViewReport;
+
   // Update unread count whenever notifications change
   useEffect(() => {
     const count = notifications.filter(notification => !notification.read).length;
@@ -79,6 +86,42 @@ const [latestReportFetched, setLatestReportFetched] = useState(false);
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  // Reset states when project changes
+  useEffect(() => {
+    if (selectedProject) {
+      setSelectedRelease(null);
+      setReleases([]);
+      setReportGenerated(false);
+      setReportViewed(false);
+      setReportData({
+        lastRefresh: null,
+        unmappedUserStories: [],
+        unmappedTestCases: [],
+        countNullValues: [],
+        noStepsExpectedResults: [],
+        emptyTestSteps: [],
+        emptyExpectedResults: []
+      });
+    }
+  }, [selectedProject]);
+
+  // Reset report states when release changes
+  useEffect(() => {
+    if (selectedRelease) {
+      setReportGenerated(false);
+      setReportViewed(false);
+      setReportData({
+        lastRefresh: null,
+        unmappedUserStories: [],
+        unmappedTestCases: [],
+        countNullValues: [],
+        noStepsExpectedResults: [],
+        emptyTestSteps: [],
+        emptyExpectedResults: []
+      });
+    }
+  }, [selectedRelease]);
 
   const fetchProjects = async () => {
     setLoadingProjects(true);
@@ -121,8 +164,6 @@ const [latestReportFetched, setLatestReportFetched] = useState(false);
 
   const handleProjectSelect = (project) => {
     setSelectedProject(project);
-    setSelectedRelease(null);
-    setReleases([]);
     
     if (project) {
       fetchReleases(project.id);
@@ -133,54 +174,60 @@ const [latestReportFetched, setLatestReportFetched] = useState(false);
     setSelectedRelease(release);
   };
 
-  
-const handleGenerateReport = async () => {
-  if (selectedProject && selectedRelease) {
-    setLoadingReport(true);
+  // Step 1: Generate Report (Only latest-report API)
+  const handleGenerateReport = async () => {
+    if (!selectedProject || !selectedRelease) return;
+    
+    setLoadingGenerateReport(true);
     setError(null);
-
+    
     try {
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
-
+      
+      // Call only the latest-report API
       const latestReportResponse = await fetch(`/api/zephyr-data/latest-report/${projectId}/${releaseId}`);
       const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
 
+      // Update only the lastRefresh timestamp
       setReportData(prev => ({
         ...prev,
-        lastRefresh: latestReport?.created_at || null,
+        lastRefresh: latestReport?.created_at || new Date().toISOString()
       }));
 
-      setLatestReportFetched(true);
+      setReportGenerated(true);
 
+      // Add notification for successful report generation
       const newNotification = {
         id: Date.now(),
-        title: "Metadata Fetched",
-        message: `Latest report metadata fetched for ${selectedProject.name} - ${selectedRelease.name}`,
+        title: "Report Generated",
+        message: `Report generated for ${selectedProject.name} - ${selectedRelease.name}. Click "View Report" to see details.`,
         date: new Date().toLocaleString(),
         read: false,
-        type: "info"
+        type: "success"
       };
       setNotifications(prev => [newNotification, ...prev]);
-
+      
     } catch (err) {
-      setError('Failed to fetch latest report. Please try again.');
-      console.error('Error fetching latest report:', err);
+      setError('Failed to generate report. Please try again.');
+      console.error('Error generating report:', err);
     } finally {
-      setLoadingReport(false);
+      setLoadingGenerateReport(false);
     }
-  }
-};
+  };
 
-const handleViewReport = async () => {
-  if (selectedProject && selectedRelease) {
-    setLoadingReport(true);
+  // Step 2: View Report (All 6 data APIs)
+  const handleViewReport = async () => {
+    if (!selectedProject || !selectedRelease || !reportGenerated) return;
+    
+    setLoadingViewReport(true);
     setError(null);
-
+    
     try {
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
-
+      
+      // Call all 6 data APIs simultaneously
       const [
         unmappedUserStoriesResponse,
         unmappedTestCasesResponse,
@@ -197,6 +244,7 @@ const handleViewReport = async () => {
         fetch(`/api/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
       ]);
 
+      // Parse responses
       const unmappedUserStories = unmappedUserStoriesResponse.ok ? await unmappedUserStoriesResponse.json() : [];
       const unmappedTestCases = unmappedTestCasesResponse.ok ? await unmappedTestCasesResponse.json() : [];
       const countNullValues = countNullValuesResponse.ok ? await countNullValuesResponse.json() : [];
@@ -204,36 +252,37 @@ const handleViewReport = async () => {
       const emptyTestSteps = emptyTestStepsResponse.ok ? await emptyTestStepsResponse.json() : [];
       const emptyExpectedResults = emptyExpectedResultsResponse.ok ? await emptyExpectedResultsResponse.json() : [];
 
+      // Update state with all report data
       setReportData(prev => ({
-        ...prev,
-        unmappedUserStories,
-        unmappedTestCases,
-        countNullValues,
-        noStepsExpectedResults,
-        emptyTestSteps,
-        emptyExpectedResults
+        ...prev, // Keep the lastRefresh from generate step
+        unmappedUserStories: unmappedUserStories || [],
+        unmappedTestCases: unmappedTestCases || [],
+        countNullValues: countNullValues || [],
+        noStepsExpectedResults: noStepsExpectedResults || [],
+        emptyTestSteps: emptyTestSteps || [],
+        emptyExpectedResults: emptyExpectedResults || []
       }));
 
-      setReportGenerated(true);
+      setReportViewed(true);
 
+      // Add notification for successful report viewing
       const newNotification = {
         id: Date.now(),
-        title: "Analytics Report Ready",
-        message: `Full report loaded for ${selectedProject.name} - ${selectedRelease.name}`,
+        title: "Report Data Loaded",
+        message: `All analytics data loaded for ${selectedProject.name} - ${selectedRelease.name}`,
         date: new Date().toLocaleString(),
         read: false,
         type: "success"
       };
       setNotifications(prev => [newNotification, ...prev]);
-
+      
     } catch (err) {
-      setError('Failed to load full report. Please try again.');
-      console.error('Error fetching report data:', err);
+      setError('Failed to load report data. Please try again.');
+      console.error('Error loading report data:', err);
     } finally {
-      setLoadingReport(false);
+      setLoadingViewReport(false);
     }
-  }
-};
+  };
 
   // Pagination functions
   const getCurrentPageData = (data, page) => {
@@ -443,9 +492,6 @@ const handleViewReport = async () => {
     );
   };
 
-  // Check if generate button should be enabled
-  const isGenerateEnabled = selectedProject && selectedRelease;
-  
   const handleNotificationClick = () => {
     setShowNotifications(!showNotifications);
     setShowProfileMenu(false);
@@ -578,7 +624,7 @@ const handleViewReport = async () => {
               className="text-gray-500 hover:text-gray-700"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.3 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
               </svg>
             </button>
           </div>
@@ -770,10 +816,10 @@ const handleViewReport = async () => {
         />
       )}
 
-      {/* Control Bar - Horizontal Layout */}
+      {/* Control Bar - Progressive Enable Flow */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-end gap-6">
-          {/* Project Dropdown */}
+          {/* Project Dropdown - Always Enabled */}
           <div className="flex-1 max-w-xs">
             <CustomDropdown
               label="Select Project"
@@ -786,66 +832,75 @@ const handleViewReport = async () => {
             />
           </div>
 
-          {/* Release Dropdown */}
+          {/* Release Dropdown - Enabled only after project selection */}
           <div className="flex-1 max-w-xs">
             <CustomDropdown
               label="Select Release"
               options={releases}
               selected={selectedRelease}
               onSelect={handleReleaseSelect}
-              disabled={!selectedProject}
+              disabled={!isProjectSelected}
               loading={loadingReleases}
-              placeholder={selectedProject ? "Choose a release..." : "Select a project first"}
+              placeholder={isProjectSelected ? "Choose a release..." : "Select a project first"}
             />
           </div>
 
-          {/* Generate Button */}
-          
-<div className="flex flex-col space-y-2">
-  <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">Actions</label>
+          {/* Generate Report Button - Enabled after both selections */}
+          <div className="flex flex-col">
+            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+              Action
+            </label>
+            <button
+              onClick={handleGenerateReport}
+              disabled={!isGenerateReportEnabled}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                isGenerateReportEnabled
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {loadingGenerateReport ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Generating...
+                </div>
+              ) : (
+                'Generate Report'
+              )}
+            </button>
+          </div>
 
-  <button
-    onClick={handleGenerateReport}
-    disabled={!isGenerateEnabled || loadingReport}
-    className={`px-6 py-2 rounded-lg font-medium transition-all ${
-      isGenerateEnabled && !loadingReport
-        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-    }`}
-  >
-    {loadingReport ? (
-      <div className="flex items-center">
-        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-        Fetching Metadata...
-      </div>
-    ) : 'Generate Report'}
-  </button>
+          {/* View Report Button - Enabled after generate report */}
+          <div className="flex flex-col">
+            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+              View
+            </label>
+            <button
+              onClick={handleViewReport}
+              disabled={!isViewReportEnabled}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                isViewReportEnabled
+                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {loadingViewReport ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Loading...
+                </div>
+              ) : (
+                'View Report'
+              )}
+            </button>
+          </div>
 
-  <button
-    onClick={handleViewReport}
-    disabled={!latestReportFetched || loadingReport}
-    className={`px-6 py-2 rounded-lg font-medium transition-all ${
-      latestReportFetched && !loadingReport
-        ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-    }`}
-  >
-    {loadingReport ? (
-      <div className="flex items-center">
-        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-        Loading Tables...
-      </div>
-    ) : 'View Report'}
-  </button>
-</div>
-
-
-          {/* Last Refresh Info */}
-          {reportData.lastRefresh && !loadingReport && (
+          {/* Last Refresh Info - Shows after generate */}
+          {reportGenerated && reportData.lastRefresh && (
             <div className="flex flex-col justify-end">
-              <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2">
+              <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
                 <span className="mr-1">🕒</span>
-                Last refreshed: {formatDateTime(reportData.lastRefresh)}
+                Generated: {formatDateTime(reportData.lastRefresh)}
               </div>
             </div>
           )}
@@ -862,8 +917,8 @@ const handleViewReport = async () => {
         )}
       </div>
 
-      {/* Main Content - Reports with Tabs */}
-      {reportGenerated && (
+      {/* Main Content - Reports with Tabs (Only show when report is viewed) */}
+      {reportViewed && (
         <div className="flex-1 bg-gray-50">
           {/* Tab Navigation */}
           <div className="bg-white border-b border-gray-200">
@@ -900,14 +955,34 @@ const handleViewReport = async () => {
         </div>
       )}
 
-      {/* Empty State when no report generated */}
+      {/* Empty States */}
       {!reportGenerated && (
         <div className="flex-1 bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="text-gray-400 text-8xl mb-6">📊</div>
             <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
             <p className="text-lg text-gray-600 max-w-md mx-auto">
-              Select a project and release from the controls above, then click "Generate Report" to view comprehensive analytics.
+              {!isProjectSelected 
+                ? "Select a project to begin generating your analytics report."
+                : !isReleaseSelected
+                  ? "Select a release to continue with report generation."
+                  : "Click 'Generate Report' to create your analytics report."
+              }
+            </p>
+          </div>
+        </div>
+      )}
+
+      {reportGenerated && !reportViewed && (
+        <div className="flex-1 bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-green-500 text-8xl mb-6">✅</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Report Generated Successfully</h3>
+            <p className="text-lg text-gray-600 max-w-md mx-auto mb-6">
+              Your analytics report has been generated for {selectedProject?.name} - {selectedRelease?.name}.
+            </p>
+            <p className="text-base text-gray-500">
+              Click "View Report" to load and display the detailed analytics data.
             </p>
           </div>
         </div>
