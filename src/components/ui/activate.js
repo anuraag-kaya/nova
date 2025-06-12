@@ -32,6 +32,7 @@ export default function Analytics() {
   });
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+const [latestReportFetched, setLatestReportFetched] = useState(false);
   
   // Tab and pagination state
   const [activeTab, setActiveTab] = useState('unmappedUserStories');
@@ -132,75 +133,107 @@ export default function Analytics() {
     setSelectedRelease(release);
   };
 
-  const handleGenerateReport = async () => {
-    if (selectedProject && selectedRelease) {
-      setLoadingReport(true);
-      setError(null);
-      
-      try {
-        const projectId = selectedProject.id;
-        const releaseId = selectedRelease.id;
-        
-        // Call all APIs simultaneously
-        const [
-          latestReportResponse,
-          unmappedUserStoriesResponse,
-          unmappedTestCasesResponse,
-          countNullValuesResponse,
-          noStepsExpectedResultsResponse,
-          emptyTestStepsResponse,
-          emptyExpectedResultsResponse
-        ] = await Promise.all([
-          fetch(`/api/zephyr-data/latest-report/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/count-null-values/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/no-steps-expected-results/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/empty-test-steps/${projectId}/${releaseId}`),
-          fetch(`/api/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
-        ]);
+  
+const handleGenerateReport = async () => {
+  if (selectedProject && selectedRelease) {
+    setLoadingReport(true);
+    setError(null);
 
-        // Parse responses
-        const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
-        const unmappedUserStories = unmappedUserStoriesResponse.ok ? await unmappedUserStoriesResponse.json() : [];
-        const unmappedTestCases = unmappedTestCasesResponse.ok ? await unmappedTestCasesResponse.json() : [];
-        const countNullValues = countNullValuesResponse.ok ? await countNullValuesResponse.json() : [];
-        const noStepsExpectedResults = noStepsExpectedResultsResponse.ok ? await noStepsExpectedResultsResponse.json() : [];
-        const emptyTestSteps = emptyTestStepsResponse.ok ? await emptyTestStepsResponse.json() : [];
-        const emptyExpectedResults = emptyExpectedResultsResponse.ok ? await emptyExpectedResultsResponse.json() : [];
+    try {
+      const projectId = selectedProject.id;
+      const releaseId = selectedRelease.id;
 
-        // Update state
-        setReportData({
-          lastRefresh: latestReport?.created_at || null,
-          unmappedUserStories: unmappedUserStories || [],
-          unmappedTestCases: unmappedTestCases || [],
-          countNullValues: countNullValues || [],
-          noStepsExpectedResults: noStepsExpectedResults || [],
-          emptyTestSteps: emptyTestSteps || [],
-          emptyExpectedResults: emptyExpectedResults || []
-        });
+      const latestReportResponse = await fetch(`/api/zephyr-data/latest-report/${projectId}/${releaseId}`);
+      const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
 
-        setReportGenerated(true);
+      setReportData(prev => ({
+        ...prev,
+        lastRefresh: latestReport?.created_at || null,
+      }));
 
-        // Add notification for successful report generation
-        const newNotification = {
-          id: Date.now(),
-          title: "Analytics Report Generated",
-          message: `Successfully generated report for ${selectedProject.name} - ${selectedRelease.name}`,
-          date: new Date().toLocaleString(),
-          read: false,
-          type: "success"
-        };
-        setNotifications(prev => [newNotification, ...prev]);
-        
-      } catch (err) {
-        setError('Failed to generate report. Please try again.');
-        console.error('Error generating report:', err);
-      } finally {
-        setLoadingReport(false);
-      }
+      setLatestReportFetched(true);
+
+      const newNotification = {
+        id: Date.now(),
+        title: "Metadata Fetched",
+        message: `Latest report metadata fetched for ${selectedProject.name} - ${selectedRelease.name}`,
+        date: new Date().toLocaleString(),
+        read: false,
+        type: "info"
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+
+    } catch (err) {
+      setError('Failed to fetch latest report. Please try again.');
+      console.error('Error fetching latest report:', err);
+    } finally {
+      setLoadingReport(false);
     }
-  };
+  }
+};
+
+const handleViewReport = async () => {
+  if (selectedProject && selectedRelease) {
+    setLoadingReport(true);
+    setError(null);
+
+    try {
+      const projectId = selectedProject.id;
+      const releaseId = selectedRelease.id;
+
+      const [
+        unmappedUserStoriesResponse,
+        unmappedTestCasesResponse,
+        countNullValuesResponse,
+        noStepsExpectedResultsResponse,
+        emptyTestStepsResponse,
+        emptyExpectedResultsResponse
+      ] = await Promise.all([
+        fetch(`/api/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
+        fetch(`/api/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
+        fetch(`/api/zephyr-data/count-null-values/${projectId}/${releaseId}`),
+        fetch(`/api/zephyr-data/no-steps-expected-results/${projectId}/${releaseId}`),
+        fetch(`/api/zephyr-data/empty-test-steps/${projectId}/${releaseId}`),
+        fetch(`/api/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
+      ]);
+
+      const unmappedUserStories = unmappedUserStoriesResponse.ok ? await unmappedUserStoriesResponse.json() : [];
+      const unmappedTestCases = unmappedTestCasesResponse.ok ? await unmappedTestCasesResponse.json() : [];
+      const countNullValues = countNullValuesResponse.ok ? await countNullValuesResponse.json() : [];
+      const noStepsExpectedResults = noStepsExpectedResultsResponse.ok ? await noStepsExpectedResultsResponse.json() : [];
+      const emptyTestSteps = emptyTestStepsResponse.ok ? await emptyTestStepsResponse.json() : [];
+      const emptyExpectedResults = emptyExpectedResultsResponse.ok ? await emptyExpectedResultsResponse.json() : [];
+
+      setReportData(prev => ({
+        ...prev,
+        unmappedUserStories,
+        unmappedTestCases,
+        countNullValues,
+        noStepsExpectedResults,
+        emptyTestSteps,
+        emptyExpectedResults
+      }));
+
+      setReportGenerated(true);
+
+      const newNotification = {
+        id: Date.now(),
+        title: "Analytics Report Ready",
+        message: `Full report loaded for ${selectedProject.name} - ${selectedRelease.name}`,
+        date: new Date().toLocaleString(),
+        read: false,
+        type: "success"
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+
+    } catch (err) {
+      setError('Failed to load full report. Please try again.');
+      console.error('Error fetching report data:', err);
+    } finally {
+      setLoadingReport(false);
+    }
+  }
+};
 
   // Pagination functions
   const getCurrentPageData = (data, page) => {
@@ -767,29 +800,45 @@ export default function Analytics() {
           </div>
 
           {/* Generate Button */}
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-              Action
-            </label>
-            <button
-              onClick={handleGenerateReport}
-              disabled={!isGenerateEnabled || loadingReport}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                isGenerateEnabled && !loadingReport
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {loadingReport ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                  Generating...
-                </div>
-              ) : (
-                'Generate Report'
-              )}
-            </button>
-          </div>
+          
+<div className="flex flex-col space-y-2">
+  <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">Actions</label>
+
+  <button
+    onClick={handleGenerateReport}
+    disabled={!isGenerateEnabled || loadingReport}
+    className={`px-6 py-2 rounded-lg font-medium transition-all ${
+      isGenerateEnabled && !loadingReport
+        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+    }`}
+  >
+    {loadingReport ? (
+      <div className="flex items-center">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+        Fetching Metadata...
+      </div>
+    ) : 'Generate Report'}
+  </button>
+
+  <button
+    onClick={handleViewReport}
+    disabled={!latestReportFetched || loadingReport}
+    className={`px-6 py-2 rounded-lg font-medium transition-all ${
+      latestReportFetched && !loadingReport
+        ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+    }`}
+  >
+    {loadingReport ? (
+      <div className="flex items-center">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+        Loading Tables...
+      </div>
+    ) : 'View Report'}
+  </button>
+</div>
+
 
           {/* Last Refresh Info */}
           {reportData.lastRefresh && !loadingReport && (
