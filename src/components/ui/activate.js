@@ -4,13 +4,20 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from 'next/navigation';
-import * as XLSX from 'xlsx';
 
 export default function Analytics() {
   const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  
+  // Left panel states
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const [isExecutiveExpanded, setIsExecutiveExpanded] = useState(false);
+  const [isOperationalExpanded, setIsOperationalExpanded] = useState(true);
+  
+  // Operational tool selection
+  const [selectedTool, setSelectedTool] = useState(null); // null, 'JIRA', 'ZEPHYR', 'GAP_ANALYSIS'
   
   // Form state
   const [projects, setProjects] = useState([]);
@@ -38,7 +45,6 @@ export default function Analytics() {
   
   // View state
   const [viewMode, setViewMode] = useState('table'); // Default to table view
-  const [isExporting, setIsExporting] = useState(false);
   
   // Tab and pagination state
   const [activeTab, setActiveTab] = useState('unmappedUserStories');
@@ -57,7 +63,7 @@ export default function Analytics() {
     {
       id: 1,
       title: "Welcome to ASTRA Analytics",
-      message: "Select a project and release to generate comprehensive reports",
+      message: "Select a tool from the Operational section to begin",
       date: new Date().toLocaleString(),
       read: false,
       type: "info"
@@ -75,6 +81,43 @@ export default function Analytics() {
     { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌', color: '#EC4899' }
   ];
 
+  // Operational tools configuration
+  const operationalTools = [
+    {
+      id: 'JIRA',
+      name: 'JIRA Analytics',
+      description: 'Analyze JIRA project data',
+      icon: '🛠️',
+      color: 'from-blue-500 to-blue-600',
+      bgHover: 'hover:from-blue-50/50',
+      apiBase: '/api/jira-data'
+    },
+    {
+      id: 'ZEPHYR',
+      name: 'ZEPHYR Reports',
+      description: 'Generate Zephyr test reports',
+      icon: '⚡',
+      color: 'from-purple-500 to-purple-600',
+      bgHover: 'hover:from-purple-50/50',
+      apiBase: '/api/zephyr-data'
+    },
+    {
+      id: 'GAP_ANALYSIS',
+      name: 'GAP Analysis',
+      description: 'Identify testing gaps',
+      icon: '📊',
+      color: 'from-amber-500 to-amber-600',
+      bgHover: 'hover:from-amber-50/50',
+      apiBase: '/api/gap-analysis'
+    }
+  ];
+
+  // Get current API base path based on selected tool
+  const getApiBasePath = () => {
+    const tool = operationalTools.find(t => t.id === selectedTool);
+    return tool?.apiBase || '/api/zephyr-data';
+  };
+
   // Button enable states
   const isProjectSelected = !!selectedProject;
   const isReleaseSelected = !!selectedRelease;
@@ -87,10 +130,45 @@ export default function Analytics() {
     setUnreadNotifications(count);
   }, [notifications]);
 
-  // Fetch projects on component mount
+  // Reset all states when tool changes
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (selectedTool) {
+      // Reset all form and report states
+      setProjects([]);
+      setReleases([]);
+      setSelectedProject(null);
+      setSelectedRelease(null);
+      setReportGenerated(false);
+      setReportViewed(false);
+      setReportData({
+        lastRefresh: null,
+        unmappedUserStories: [],
+        unmappedTestCases: [],
+        countNullValues: [],
+        noStepsExpectedResults: [],
+        emptyTestSteps: [],
+        emptyExpectedResults: []
+      });
+      setError(null);
+      
+      // Fetch projects for the selected tool
+      fetchProjects();
+      
+      // Add notification for tool selection
+      const tool = operationalTools.find(t => t.id === selectedTool);
+      if (tool) {
+        const newNotification = {
+          id: Date.now(),
+          title: `${tool.name} Selected`,
+          message: `Now using ${tool.name}. Select a project and release to generate reports.`,
+          date: new Date().toLocaleString(),
+          read: false,
+          type: "info"
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+      }
+    }
+  }, [selectedTool]);
 
   // Reset states when project changes
   useEffect(() => {
@@ -129,11 +207,14 @@ export default function Analytics() {
   }, [selectedRelease]);
 
   const fetchProjects = async () => {
+    if (!selectedTool) return;
+    
     setLoadingProjects(true);
     setError(null);
     
     try {
-      const response = await fetch('/api/zephyr-data/projects');
+      const apiBase = getApiBasePath();
+      const response = await fetch(`${apiBase}/projects`);
       if (!response.ok) {
         throw new Error('Failed to fetch projects');
       }
@@ -148,11 +229,14 @@ export default function Analytics() {
   };
 
   const fetchReleases = async (projectId) => {
+    if (!selectedTool) return;
+    
     setLoadingReleases(true);
     setError(null);
     
     try {
-      const response = await fetch(`/api/zephyr-data/releases/${projectId}`);
+      const apiBase = getApiBasePath();
+      const response = await fetch(`${apiBase}/releases/${projectId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch releases');
       }
@@ -179,93 +263,24 @@ export default function Analytics() {
     setSelectedRelease(release);
   };
 
-  // Export to Excel functionality
-  const exportToExcel = async () => {
-    setIsExporting(true);
-
-    try {
-      const wb = XLSX.utils.book_new();
-      
-      // Add metadata sheet
-      const metadata = [
-        ['Report Generated', new Date(reportData.lastRefresh).toLocaleString()],
-        ['Project', selectedProject?.name || 'N/A'],
-        ['Release', selectedRelease?.name || 'N/A'],
-        ['Export Date', new Date().toLocaleString()],
-        ['Total Records', Object.values(reportData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)]
-      ];
-      const metadataWS = XLSX.utils.aoa_to_sheet(metadata);
-      XLSX.utils.book_append_sheet(wb, metadataWS, 'Report Info');
-
-      // Add each tab's data as a separate sheet
-      tabs.forEach(tab => {
-        const data = reportData[tab.id] || [];
-        if (data.length > 0) {
-          const ws = XLSX.utils.json_to_sheet(data);
-          
-          // Apply styling to header row
-          const range = XLSX.utils.decode_range(ws['!ref']);
-          for (let C = range.s.c; C <= range.e.c; ++C) {
-            const address = XLSX.utils.encode_col(C) + "1";
-            if (!ws[address]) continue;
-            ws[address].s = {
-              font: { bold: true },
-              fill: { fgColor: { rgb: "0057e7" } },
-              alignment: { horizontal: "center" }
-            };
-          }
-          
-          XLSX.utils.book_append_sheet(wb, ws, tab.label.substring(0, 31)); // Excel sheet names max 31 chars
-        }
-      });
-
-      // Generate filename with timestamp
-      const fileName = `ASTRA_Analytics_${selectedProject?.name}_${selectedRelease?.name}_${new Date().toISOString().split('T')[0]}.xlsx`;
-      
-      // Write and download
-      XLSX.writeFile(wb, fileName);
-
-      // Add success notification
-      const newNotification = {
-        id: Date.now(),
-        title: "Export Successful",
-        message: `Report exported successfully as Excel file`,
-        date: new Date().toLocaleString(),
-        read: false,
-        type: "success"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-    } catch (err) {
-      console.error('Export error:', err);
-      
-      // Add error notification
-      const newNotification = {
-        id: Date.now(),
-        title: "Export Failed",
-        message: "Failed to export report. Please try again.",
-        date: new Date().toLocaleString(),
-        read: false,
-        type: "error"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-    } finally {
-      setIsExporting(false);
-    }
+  const handleToolSelect = (toolId) => {
+    setSelectedTool(toolId);
   };
 
   // Step 1: Generate Report (Only latest-report API)
   const handleGenerateReport = async () => {
-    if (!selectedProject || !selectedRelease) return;
+    if (!selectedProject || !selectedRelease || !selectedTool) return;
     
     setLoadingGenerateReport(true);
     setError(null);
     
     try {
+      const apiBase = getApiBasePath();
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
       
       // Call only the latest-report API
-      const latestReportResponse = await fetch(`/api/zephyr-data/latest-report/${projectId}/${releaseId}`);
+      const latestReportResponse = await fetch(`${apiBase}/latest-report/${projectId}/${releaseId}`);
       const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
 
       // Update only the lastRefresh timestamp
@@ -297,12 +312,13 @@ export default function Analytics() {
 
   // Step 2: View Report (All 6 data APIs)
   const handleViewReport = async () => {
-    if (!selectedProject || !selectedRelease || !reportGenerated) return;
+    if (!selectedProject || !selectedRelease || !reportGenerated || !selectedTool) return;
     
     setLoadingViewReport(true);
     setError(null);
     
     try {
+      const apiBase = getApiBasePath();
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
       
@@ -315,12 +331,12 @@ export default function Analytics() {
         emptyTestStepsResponse,
         emptyExpectedResultsResponse
       ] = await Promise.all([
-        fetch(`/api/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
-        fetch(`/api/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
-        fetch(`/api/zephyr-data/count-null-values/${projectId}/${releaseId}`),
-        fetch(`/api/zephyr-data/no-steps-expected-results/${projectId}/${releaseId}`),
-        fetch(`/api/zephyr-data/empty-test-steps/${projectId}/${releaseId}`),
-        fetch(`/api/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
+        fetch(`${apiBase}/unmapped-user-stories/${projectId}/${releaseId}`),
+        fetch(`${apiBase}/unmapped-test-cases/${projectId}/${releaseId}`),
+        fetch(`${apiBase}/count-null-values/${projectId}/${releaseId}`),
+        fetch(`${apiBase}/no-steps-expected-results/${projectId}/${releaseId}`),
+        fetch(`${apiBase}/empty-test-steps/${projectId}/${releaseId}`),
+        fetch(`${apiBase}/empty-expected-results/${projectId}/${releaseId}`)
       ]);
 
       // Parse responses
@@ -779,6 +795,270 @@ export default function Analytics() {
     )
   );
 
+  // Enhanced Beautiful Left Panel Component with Tool Selection
+  const BeautifulPanel = () => (
+    <div 
+      className={`bg-white/95 backdrop-blur-xl border-r border-gray-200/50 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        isPanelCollapsed ? 'w-14' : 'w-80'
+      } flex flex-col shadow-[0_0_15px_rgba(0,0,0,0.05)] relative overflow-hidden`}
+      style={{ 
+        transform: isPanelCollapsed ? 'translateX(0)' : 'translateX(0)',
+        willChange: 'width, transform'
+      }}
+    >
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-white/30 pointer-events-none" />
+      
+      {/* Panel Header with Glass Effect */}
+      <div className={`relative z-10 flex items-center justify-between h-14 px-4 bg-gradient-to-r from-white/90 to-gray-50/90 backdrop-blur-md border-b border-gray-200/50 ${
+        isPanelCollapsed ? 'px-2' : 'px-5'
+      } transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]`}>
+        {!isPanelCollapsed && (
+          <>
+            <div className="flex items-center space-x-2 opacity-100 transition-opacity duration-500 ease-in-out">
+              <span className="text-sm font-semibold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent tracking-wide">
+                ANALYTICS SUITE
+              </span>
+            </div>
+            <button
+              onClick={() => setIsPanelCollapsed(true)}
+              className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-105"
+              aria-label="Collapse panel"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
+                <path fill="currentColor" d="M11 8L6 13V3z" />
+              </svg>
+            </button>
+          </>
+        )}
+        {isPanelCollapsed && (
+          <button
+            onClick={() => setIsPanelCollapsed(false)}
+            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm mx-auto transform hover:scale-105"
+            aria-label="Expand panel"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
+              <path fill="currentColor" d="M5 8L10 3v10z" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Panel Sections with Ultra-Smooth Animations */}
+      {!isPanelCollapsed && (
+        <div 
+          className="flex-grow overflow-y-auto overflow-x-hidden relative z-10 opacity-100 transition-opacity duration-700 ease-in-out"
+          style={{ transitionDelay: isPanelCollapsed ? '0ms' : '200ms' }}
+        >
+          {/* Executive Section */}
+          <div className="border-b border-gray-100">
+            <button
+              onClick={() => setIsExecutiveExpanded(!isExecutiveExpanded)}
+              className="w-full flex items-center px-5 py-4 hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-500 group"
+            >
+              <div className={`mr-3 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExecutiveExpanded ? 'rotate-90' : ''}`}>
+                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400 group-hover:text-blue-500 transition-colors duration-300">
+                  <path fill="currentColor" d="M8 6l4 4-4 4z" />
+                </svg>
+              </div>
+              <div className="flex items-center space-x-3 flex-1">
+                <span className="text-2xl transition-all duration-300 group-hover:scale-110">💼</span>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-300">
+                  EXECUTIVE
+                </span>
+              </div>
+            </button>
+            <div 
+              className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                isExecutiveExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+              }`}
+              style={{ transitionDelay: isExecutiveExpanded ? '100ms' : '0ms' }}
+            >
+              <div className="px-5 pl-14 py-3">
+                <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-200/50 transform transition-all duration-500 hover:scale-[1.02] hover:shadow-sm">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Executive dashboards coming soon
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Operational Section with Tools */}
+          <div className="border-b border-gray-100">
+            <button
+              onClick={() => setIsOperationalExpanded(!isOperationalExpanded)}
+              className="w-full flex items-center px-5 py-4 hover:bg-gradient-to-r hover:from-green-50/50 hover:to-transparent transition-all duration-500 group"
+            >
+              <div className={`mr-3 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOperationalExpanded ? 'rotate-90' : ''}`}>
+                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400 group-hover:text-green-500 transition-colors duration-300">
+                  <path fill="currentColor" d="M8 6l4 4-4 4z" />
+                </svg>
+              </div>
+              <div className="flex items-center space-x-3 flex-1">
+                <span className="text-2xl transition-all duration-300 group-hover:scale-110">🗂</span>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-300">
+                  OPERATIONAL
+                </span>
+              </div>
+            </button>
+            <div 
+              className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                isOperationalExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+              }`}
+              style={{ transitionDelay: isOperationalExpanded ? '100ms' : '0ms' }}
+            >
+              <div className="px-5 pl-14 py-3 space-y-2">
+                {operationalTools.map((tool) => (
+                  <button
+                    key={tool.id}
+                    onClick={() => handleToolSelect(tool.id)}
+                    className={`w-full group relative overflow-hidden rounded-xl border transition-all duration-500 transform hover:scale-[1.02] hover:shadow-md ${
+                      selectedTool === tool.id
+                        ? 'bg-gradient-to-br from-white to-gray-50 border-gray-300 shadow-sm'
+                        : 'bg-white border-gray-200/50 hover:border-gray-300'
+                    }`}
+                  >
+                    {/* Active indicator */}
+                    {selectedTool === tool.id && (
+                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-400 to-blue-600" />
+                    )}
+                    
+                    <div className="relative z-10 p-4 flex items-center space-x-3">
+                      <span className={`text-3xl transition-all duration-300 group-hover:scale-110 ${
+                        selectedTool === tool.id ? 'scale-110' : ''
+                      }`}>{tool.icon}</span>
+                      <div className="flex-1 text-left">
+                        <h4 className={`text-sm font-semibold transition-colors duration-300 ${
+                          selectedTool === tool.id ? 'text-gray-900' : 'text-gray-700 group-hover:text-gray-900'
+                        }`}>
+                          {tool.name}
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {tool.description}
+                        </p>
+                      </div>
+                      {selectedTool === tool.id && (
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600">
+                          <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L7 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Hover effect gradient */}
+                    <div className={`absolute inset-0 bg-gradient-to-r ${tool.bgHover} opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collapsed State Icons with Smooth Transitions */}
+      {isPanelCollapsed && (
+        <div 
+          className="flex-grow flex flex-col items-center py-6 space-y-6 opacity-100 transition-opacity duration-500 ease-in-out"
+          style={{ transitionDelay: isPanelCollapsed ? '300ms' : '0ms' }}
+        >
+          <button
+            onClick={() => {
+              setIsPanelCollapsed(false);
+              setIsExecutiveExpanded(true);
+            }}
+            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-110"
+            title="Executive"
+          >
+            <span className="text-2xl">💼</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              setIsPanelCollapsed(false);
+              setIsOperationalExpanded(true);
+            }}
+            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-110"
+            title="Operational"
+          >
+            <span className="text-2xl">🗂</span>
+          </button>
+          
+          {/* Selected Tool Indicator in Collapsed State */}
+          {selectedTool && (
+            <div className="mt-auto mb-4">
+              {operationalTools.map((tool) => (
+                selectedTool === tool.id && (
+                  <span
+                    key={tool.id}
+                    className="text-3xl"
+                    title={tool.name}
+                  >
+                    {tool.icon}
+                  </span>
+                )
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Welcome Screen Component
+  const WelcomeScreen = () => (
+    <div className="flex-1 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+      <div className="max-w-2xl mx-auto text-center px-8">
+        {/* Animated Icon */}
+        <div className="mb-8 relative">
+          <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse">
+            <span className="text-6xl">📊</span>
+          </div>
+          <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-400 rounded-full animate-ping"></div>
+        </div>
+        
+        {/* Welcome Text */}
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-4">
+          Welcome to ASTRA Analytics Suite
+        </h1>
+        
+        <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+          Get started by selecting an analytics tool from the <span className="font-semibold text-green-600">Operational</span> section 
+          in the left panel. Choose between JIRA, Zephyr, or Gap Analysis to begin generating comprehensive reports.
+        </p>
+        
+        {/* Feature Cards */}
+        <div className="grid grid-cols-3 gap-6 mt-12">
+          {operationalTools.map((tool) => (
+            <div
+              key={tool.id}
+              className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-105"
+              onClick={() => {
+                handleToolSelect(tool.id);
+                if (isPanelCollapsed) {
+                  setIsPanelCollapsed(false);
+                }
+                setIsOperationalExpanded(true);
+              }}
+            >
+              <div className={`w-16 h-16 mx-auto mb-4 flex items-center justify-center`}>
+                <span className="text-5xl">{tool.icon}</span>
+              </div>
+              <h3 className="font-semibold text-gray-800 mb-2">{tool.name}</h3>
+              <p className="text-sm text-gray-600">{tool.description}</p>
+            </div>
+          ))}
+        </div>
+        
+        {/* Instructions */}
+        <div className="mt-12 text-sm text-gray-500">
+          <p>📍 Click on any tool above or use the left panel to navigate</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
       {/* Header */}
@@ -902,209 +1182,223 @@ export default function Analytics() {
         />
       )}
 
-      {/* Control Bar - Progressive Enable Flow */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-end gap-6">
-          {/* Project Dropdown - Always Enabled */}
-          <div className="flex-1 max-w-xs">
-            <CustomDropdown
-              label="Select Project"
-              options={projects}
-              selected={selectedProject}
-              onSelect={handleProjectSelect}
-              disabled={false}
-              loading={loadingProjects}
-              placeholder="Choose a project..."
-            />
-          </div>
+      {/* Main Layout with VSCode Panel extending to footer */}
+      <div className="flex flex-1">
+        {/* Beautiful Apple-inspired Left Panel */}
+        <BeautifulPanel />
 
-          {/* Release Dropdown - Enabled only after project selection */}
-          <div className="flex-1 max-w-xs">
-            <CustomDropdown
-              label="Select Release"
-              options={releases}
-              selected={selectedRelease}
-              onSelect={handleReleaseSelect}
-              disabled={!isProjectSelected}
-              loading={loadingReleases}
-              placeholder={isProjectSelected ? "Choose a release..." : "Select a project first"}
-            />
-          </div>
-
-          {/* Generate Report Button - Enabled after both selections */}
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-              Action
-            </label>
-            <button
-              onClick={handleGenerateReport}
-              disabled={!isGenerateReportEnabled}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                isGenerateReportEnabled
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {loadingGenerateReport ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                  Generating...
-                </div>
-              ) : (
-                'Generate Report'
-              )}
-            </button>
-          </div>
-
-          {/* View Report Button - Enabled after generate report */}
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-              View
-            </label>
-            <button
-              onClick={handleViewReport}
-              disabled={!isViewReportEnabled}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                isViewReportEnabled
-                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {loadingViewReport ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                  Loading...
-                </div>
-              ) : (
-                'View Report'
-              )}
-            </button>
-          </div>
-
-          {/* Export Button - Only shows when report is viewed */}
-          {reportViewed && (
-            <div className="flex flex-col">
-              <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-                Export
-              </label>
-              <button
-                onClick={exportToExcel}
-                disabled={isExporting}
-                className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
-                  !isExporting
-                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {isExporting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export to Excel
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Last Refresh Info - Shows after generate */}
-          {reportGenerated && reportData.lastRefresh && (
-            <div className="flex flex-col justify-end">
-              <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
-                <span className="mr-1">🕒</span>
-                Generated: {formatDateTime(reportData.lastRefresh)}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
-            <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-red-700 font-medium">{error}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Main Content - Reports Table View */}
-      {reportViewed && (
-        <div className="flex-1 bg-gray-50">
-          {/* Tab Navigation */}
-          <div className="bg-white border-b border-gray-200">
-            <div className="px-6">
-              <nav className="flex space-x-8 overflow-x-auto">
-                {tabs.map((tab) => (
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col bg-gray-50">
+          {selectedTool ? (
+            <>
+              {/* Control Bar - Progressive Enable Flow */}
+              <div className="bg-white border-b border-gray-200 px-6 py-4">
+                {/* Tool Indicator */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    {operationalTools.map((tool) => (
+                      selectedTool === tool.id && (
+                        <div key={tool.id} className="flex items-center space-x-3 animate-fadeIn">
+                          <span className="text-3xl">{tool.icon}</span>
+                          <div>
+                            <h2 className="text-xl font-semibold text-gray-900">{tool.name}</h2>
+                            <p className="text-sm text-gray-500">{tool.description}</p>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                    onClick={() => {
+                      setSelectedTool(null);
+                      setProjects([]);
+                      setReleases([]);
+                      setSelectedProject(null);
+                      setSelectedRelease(null);
+                      setReportGenerated(false);
+                      setReportViewed(false);
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
                   >
-                    <span className="mr-2 text-lg">{tab.icon}</span>
-                    {tab.label}
-                    <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                      {reportData[tab.id]?.length || 0}
-                    </span>
+                    Change Tool →
                   </button>
-                ))}
-              </nav>
-            </div>
-          </div>
+                </div>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            <DataTable 
-              data={reportData[activeTab]} 
-              tabId={activeTab}
-            />
-          </div>
-        </div>
-      )}
+                <div className="flex items-end gap-6">
+                  {/* Project Dropdown - Always Enabled */}
+                  <div className="flex-1 max-w-xs">
+                    <CustomDropdown
+                      label="Select Project"
+                      options={projects}
+                      selected={selectedProject}
+                      onSelect={handleProjectSelect}
+                      disabled={false}
+                      loading={loadingProjects}
+                      placeholder="Choose a project..."
+                    />
+                  </div>
 
-      {/* Empty States */}
-      {!reportGenerated && (
-        <div className="flex-1 bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-gray-400 text-8xl mb-6">📊</div>
-            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
-            <p className="text-lg text-gray-600 max-w-md mx-auto">
-              {!isProjectSelected 
-                ? "Select a project to begin generating your analytics report."
-                : !isReleaseSelected
-                  ? "Select a release to continue with report generation."
-                  : "Click 'Generate Report' to create your analytics report."
-              }
-            </p>
-          </div>
-        </div>
-      )}
+                  {/* Release Dropdown - Enabled only after project selection */}
+                  <div className="flex-1 max-w-xs">
+                    <CustomDropdown
+                      label="Select Release"
+                      options={releases}
+                      selected={selectedRelease}
+                      onSelect={handleReleaseSelect}
+                      disabled={!isProjectSelected}
+                      loading={loadingReleases}
+                      placeholder={isProjectSelected ? "Choose a release..." : "Select a project first"}
+                    />
+                  </div>
 
-      {reportGenerated && !reportViewed && (
-        <div className="flex-1 bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-green-500 text-8xl mb-6">✅</div>
-            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Report Generated Successfully</h3>
-            <p className="text-lg text-gray-600 max-w-md mx-auto mb-6">
-              Your analytics report has been generated for {selectedProject?.name} - {selectedRelease?.name}.
-            </p>
-            <p className="text-base text-gray-500">
-              Click "View Report" to load and display the detailed analytics data.
-            </p>
-          </div>
+                  {/* Generate Report Button - Enabled after both selections */}
+                  <div className="flex flex-col">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                      Action
+                    </label>
+                    <button
+                      onClick={handleGenerateReport}
+                      disabled={!isGenerateReportEnabled}
+                      className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                        isGenerateReportEnabled
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {loadingGenerateReport ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                          Generating...
+                        </div>
+                      ) : (
+                        'Generate Report'
+                      )}
+                    </button>
+                  </div>
+
+                  {/* View Report Button - Enabled after generate report */}
+                  <div className="flex flex-col">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                      View
+                    </label>
+                    <button
+                      onClick={handleViewReport}
+                      disabled={!isViewReportEnabled}
+                      className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                        isViewReportEnabled
+                          ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {loadingViewReport ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                          Loading...
+                        </div>
+                      ) : (
+                        'View Report'
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Last Refresh Info - Shows after generate */}
+                  {reportGenerated && reportData.lastRefresh && (
+                    <div className="flex flex-col justify-end">
+                      <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
+                        <span className="mr-1">🕒</span>
+                        Generated: {formatDateTime(reportData.lastRefresh)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+                    <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-red-700 font-medium">{error}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Main Content - Reports Table View */}
+              {reportViewed && (
+                <div className="flex-1 bg-gray-50">
+                  {/* Tab Navigation */}
+                  <div className="bg-white border-b border-gray-200">
+                    <div className="px-6">
+                      <nav className="flex space-x-8 overflow-x-auto">
+                        {tabs.map((tab) => (
+                          <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                              activeTab === tab.id
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="mr-2 text-lg">{tab.icon}</span>
+                            {tab.label}
+                            <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                              {reportData[tab.id]?.length || 0}
+                            </span>
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="p-6">
+                    <DataTable 
+                      data={reportData[activeTab]} 
+                      tabId={activeTab}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Empty States */}
+              {!reportGenerated && (
+                <div className="flex-1 bg-gray-50 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-gray-400 text-8xl mb-6">📊</div>
+                    <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
+                    <p className="text-lg text-gray-600 max-w-md mx-auto">
+                      {!isProjectSelected 
+                        ? "Select a project to begin generating your analytics report."
+                        : !isReleaseSelected
+                          ? "Select a release to continue with report generation."
+                          : "Click 'Generate Report' to create your analytics report."
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {reportGenerated && !reportViewed && (
+                <div className="flex-1 bg-gray-50 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-green-500 text-8xl mb-6">✅</div>
+                    <h3 className="text-2xl font-semibold text-gray-900 mb-4">Report Generated Successfully</h3>
+                    <p className="text-lg text-gray-600 max-w-md mx-auto mb-6">
+                      Your analytics report has been generated for {selectedProject?.name} - {selectedRelease?.name}.
+                    </p>
+                    <p className="text-base text-gray-500">
+                      Click "View Report" to load and display the detailed analytics data.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <WelcomeScreen />
+          )}
         </div>
-      )}
+      </div>
 
       {/* Footer */}
       <footer className="w-full bg-[#222222] text-white text-center p-2 flex justify-between items-center border-t border-gray-800">
