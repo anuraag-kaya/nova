@@ -4,24 +4,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from 'next/navigation';
-// Dynamic imports for Chart.js to avoid SSR issues
-import dynamic from 'next/dynamic';
-
-// Chart components with no SSR
-const DynamicChart = dynamic(
-  () => import('react-chartjs-2').then((mod) => {
-    // Register Chart.js components
-    const ChartJS = require('chart.js/auto');
-    return mod;
-  }),
-  { ssr: false }
-);
-
-const Line = dynamic(() => import('react-chartjs-2').then(mod => mod.Line), { ssr: false });
-const Bar = dynamic(() => import('react-chartjs-2').then(mod => mod.Bar), { ssr: false });
-const Doughnut = dynamic(() => import('react-chartjs-2').then(mod => mod.Doughnut), { ssr: false });
-
-// XLSX can be imported normally
 import * as XLSX from 'xlsx';
 
 export default function Analytics() {
@@ -55,11 +37,8 @@ export default function Analytics() {
   const [reportViewed, setReportViewed] = useState(false);
   
   // View state
-  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' or 'table'
+  const [viewMode, setViewMode] = useState('table'); // Default to table view
   const [isExporting, setIsExporting] = useState(false);
-  const [exportFormat, setExportFormat] = useState('excel'); // 'excel' or 'csv'
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef(null);
   
   // Tab and pagination state
   const [activeTab, setActiveTab] = useState('unmappedUserStories');
@@ -107,17 +86,6 @@ export default function Analytics() {
     const count = notifications.filter(notification => !notification.read).length;
     setUnreadNotifications(count);
   }, [notifications]);
-
-  // Close export menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
-        setShowExportMenu(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -211,23 +179,57 @@ export default function Analytics() {
     setSelectedRelease(release);
   };
 
-  // Export functionality
-  const handleExport = async () => {
+  // Export to Excel functionality
+  const exportToExcel = async () => {
     setIsExporting(true);
-    setShowExportMenu(false);
 
     try {
-      if (exportFormat === 'excel') {
-        await exportToExcel();
-      } else {
-        await exportToCSV();
-      }
+      const wb = XLSX.utils.book_new();
+      
+      // Add metadata sheet
+      const metadata = [
+        ['Report Generated', new Date(reportData.lastRefresh).toLocaleString()],
+        ['Project', selectedProject?.name || 'N/A'],
+        ['Release', selectedRelease?.name || 'N/A'],
+        ['Export Date', new Date().toLocaleString()],
+        ['Total Records', Object.values(reportData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)]
+      ];
+      const metadataWS = XLSX.utils.aoa_to_sheet(metadata);
+      XLSX.utils.book_append_sheet(wb, metadataWS, 'Report Info');
+
+      // Add each tab's data as a separate sheet
+      tabs.forEach(tab => {
+        const data = reportData[tab.id] || [];
+        if (data.length > 0) {
+          const ws = XLSX.utils.json_to_sheet(data);
+          
+          // Apply styling to header row
+          const range = XLSX.utils.decode_range(ws['!ref']);
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            const address = XLSX.utils.encode_col(C) + "1";
+            if (!ws[address]) continue;
+            ws[address].s = {
+              font: { bold: true },
+              fill: { fgColor: { rgb: "0057e7" } },
+              alignment: { horizontal: "center" }
+            };
+          }
+          
+          XLSX.utils.book_append_sheet(wb, ws, tab.label.substring(0, 31)); // Excel sheet names max 31 chars
+        }
+      });
+
+      // Generate filename with timestamp
+      const fileName = `ASTRA_Analytics_${selectedProject?.name}_${selectedRelease?.name}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      // Write and download
+      XLSX.writeFile(wb, fileName);
 
       // Add success notification
       const newNotification = {
         id: Date.now(),
         title: "Export Successful",
-        message: `Report exported successfully as ${exportFormat.toUpperCase()} file`,
+        message: `Report exported successfully as Excel file`,
         date: new Date().toLocaleString(),
         read: false,
         type: "success"
@@ -250,193 +252,6 @@ export default function Analytics() {
       setIsExporting(false);
     }
   };
-
-  const exportToExcel = async () => {
-    const wb = XLSX.utils.book_new();
-    
-    // Add metadata sheet
-    const metadata = [
-      ['Report Generated', new Date(reportData.lastRefresh).toLocaleString()],
-      ['Project', selectedProject?.name || 'N/A'],
-      ['Release', selectedRelease?.name || 'N/A'],
-      ['Export Date', new Date().toLocaleString()],
-      ['Total Records', Object.values(reportData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)]
-    ];
-    const metadataWS = XLSX.utils.aoa_to_sheet(metadata);
-    XLSX.utils.book_append_sheet(wb, metadataWS, 'Report Info');
-
-    // Add each tab's data as a separate sheet
-    tabs.forEach(tab => {
-      const data = reportData[tab.id] || [];
-      if (data.length > 0) {
-        const ws = XLSX.utils.json_to_sheet(data);
-        
-        // Apply styling to header row
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const address = XLSX.utils.encode_col(C) + "1";
-          if (!ws[address]) continue;
-          ws[address].s = {
-            font: { bold: true },
-            fill: { fgColor: { rgb: "0057e7" } },
-            alignment: { horizontal: "center" }
-          };
-        }
-        
-        XLSX.utils.book_append_sheet(wb, ws, tab.label.substring(0, 31)); // Excel sheet names max 31 chars
-      }
-    });
-
-    // Generate filename with timestamp
-    const fileName = `ASTRA_Analytics_${selectedProject?.name}_${selectedRelease?.name}_${new Date().toISOString().split('T')[0]}.xlsx`;
-    
-    // Write and download
-    XLSX.writeFile(wb, fileName);
-  };
-
-  const exportToCSV = async () => {
-    // For CSV, we'll create a zip file with multiple CSVs
-    const csvFiles = [];
-    
-    tabs.forEach(tab => {
-      const data = reportData[tab.id] || [];
-      if (data.length > 0) {
-        const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(data));
-        csvFiles.push({
-          name: `${tab.label}.csv`,
-          content: csv
-        });
-      }
-    });
-
-    // Create a single CSV with all data (simplified approach)
-    let combinedCSV = `ASTRA Analytics Report\n`;
-    combinedCSV += `Generated: ${new Date(reportData.lastRefresh).toLocaleString()}\n`;
-    combinedCSV += `Project: ${selectedProject?.name || 'N/A'}\n`;
-    combinedCSV += `Release: ${selectedRelease?.name || 'N/A'}\n\n`;
-
-    tabs.forEach(tab => {
-      const data = reportData[tab.id] || [];
-      if (data.length > 0) {
-        combinedCSV += `\n${tab.label}\n`;
-        combinedCSV += XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(data));
-        combinedCSV += '\n';
-      }
-    });
-
-    // Download combined CSV
-    const blob = new Blob([combinedCSV], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const fileName = `ASTRA_Analytics_${selectedProject?.name}_${selectedRelease?.name}_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    link.href = URL.createObjectURL(blob);
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
-
-  // Calculate analytics metrics
-  const calculateMetrics = () => {
-    const metrics = {
-      totalIssues: 0,
-      criticalIssues: 0,
-      completionRate: 0,
-      dataQualityScore: 0,
-      trendData: [],
-      distributionData: {}
-    };
-
-    // Calculate total issues
-    Object.keys(reportData).forEach(key => {
-      if (Array.isArray(reportData[key])) {
-        metrics.totalIssues += reportData[key].length;
-      }
-    });
-
-    // Calculate critical issues (unmapped items and null values)
-    metrics.criticalIssues = (reportData.unmappedUserStories?.length || 0) + 
-                           (reportData.unmappedTestCases?.length || 0) + 
-                           (reportData.countNullValues?.length || 0);
-
-    // Calculate completion rate
-    const totalExpected = 1000; // This should come from your backend
-    metrics.completionRate = totalExpected > 0 ? ((totalExpected - metrics.totalIssues) / totalExpected * 100).toFixed(1) : 0;
-
-    // Calculate data quality score (inverse of issues)
-    metrics.dataQualityScore = metrics.totalIssues > 0 ? Math.max(0, 100 - (metrics.totalIssues / 10)).toFixed(1) : 100;
-
-    // Distribution data for charts
-    tabs.forEach(tab => {
-      const count = reportData[tab.id]?.length || 0;
-      metrics.distributionData[tab.label] = count;
-    });
-
-    return metrics;
-  };
-
-  // Chart configurations
-  const getChartOptions = (title, showLegend = true) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: showLegend,
-        position: 'bottom',
-        labels: {
-          padding: 20,
-          usePointStyle: true,
-          font: {
-            size: 12,
-            weight: '500',
-            family: "'Inter', 'Roboto', sans-serif"
-          }
-        }
-      },
-      title: {
-        display: true,
-        text: title,
-        font: {
-          size: 16,
-          weight: '600',
-          family: "'Inter', 'Roboto', sans-serif"
-        },
-        padding: {
-          bottom: 20
-        }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        padding: 12,
-        cornerRadius: 8,
-        titleFont: {
-          size: 14
-        },
-        bodyFont: {
-          size: 13
-        },
-        callbacks: {
-          label: function(context) {
-            const label = context.label || '';
-            const value = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
-            return `${label}: ${value.toLocaleString()}`;
-          }
-        }
-      }
-    },
-    scales: title.includes('Trend') ? {
-      x: {
-        grid: {
-          display: false
-        }
-      },
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: 'rgba(0, 0, 0, 0.05)'
-        }
-      }
-    } : undefined
-  });
 
   // Step 1: Generate Report (Only latest-report API)
   const handleGenerateReport = async () => {
@@ -528,7 +343,6 @@ export default function Analytics() {
       }));
 
       setReportViewed(true);
-      setViewMode('dashboard'); // Default to dashboard view
 
       // Add notification for successful report viewing
       const newNotification = {
@@ -583,275 +397,6 @@ export default function Analytics() {
     } catch (err) {
       return dateString;
     }
-  };
-
-  // Dashboard Components
-  const MetricCard = ({ title, value, subtitle, icon, color, trend }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold mt-2 text-gray-900">{value}</p>
-          {subtitle && (
-            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-          )}
-          {trend && (
-            <div className={`flex items-center mt-3 text-sm font-medium ${
-              trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
-            }`}>
-              {trend > 0 ? (
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
-              ) : trend < 0 ? (
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              ) : null}
-              {Math.abs(trend)}% from last report
-            </div>
-          )}
-        </div>
-        <div className={`p-3 rounded-lg`} style={{ backgroundColor: `${color}20` }}>
-          <span className="text-2xl" style={{ color }}>{icon}</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const DashboardView = () => {
-    const metrics = calculateMetrics();
-    
-    // Prepare data for charts
-    const distributionChartData = {
-      labels: Object.keys(metrics.distributionData),
-      datasets: [{
-        label: 'Issue Count',
-        data: Object.values(metrics.distributionData),
-        backgroundColor: tabs.map(tab => `${tab.color}80`),
-        borderColor: tabs.map(tab => tab.color),
-        borderWidth: 2
-      }]
-    };
-
-    const pieChartData = {
-      labels: Object.keys(metrics.distributionData).filter(key => metrics.distributionData[key] > 0),
-      datasets: [{
-        data: Object.values(metrics.distributionData).filter(val => val > 0),
-        backgroundColor: tabs.filter(tab => (reportData[tab.id]?.length || 0) > 0).map(tab => tab.color),
-        borderColor: '#ffffff',
-        borderWidth: 2
-      }]
-    };
-
-    // Simulated trend data (in real scenario, this would come from historical data)
-    const trendData = {
-      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Current'],
-      datasets: [{
-        label: 'Total Issues',
-        data: [120, 105, 95, 85, metrics.totalIssues],
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.4
-      }, {
-        label: 'Critical Issues',
-        data: [45, 40, 35, 30, metrics.criticalIssues],
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        fill: true,
-        tension: 0.4
-      }]
-    };
-
-    return (
-      <div className="p-6 space-y-6">
-        {/* Executive Summary Section */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Executive Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Total Issues"
-              value={metrics.totalIssues.toLocaleString()}
-              subtitle="Across all categories"
-              icon="🎯"
-              color="#3B82F6"
-              trend={-15}
-            />
-            <MetricCard
-              title="Critical Issues"
-              value={metrics.criticalIssues.toLocaleString()}
-              subtitle="Requires immediate attention"
-              icon="🚨"
-              color="#EF4444"
-              trend={-8}
-            />
-            <MetricCard
-              title="Completion Rate"
-              value={`${metrics.completionRate}%`}
-              subtitle="Test coverage"
-              icon="✅"
-              color="#10B981"
-              trend={5}
-            />
-            <MetricCard
-              title="Data Quality Score"
-              value={`${metrics.dataQualityScore}%`}
-              subtitle="Overall health"
-              icon="💎"
-              color="#8B5CF6"
-              trend={12}
-            />
-          </div>
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Issue Distribution Bar Chart */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div style={{ height: '400px' }}>
-              <Bar 
-                data={distributionChartData} 
-                options={{
-                  ...getChartOptions('Issue Distribution by Category', false),
-                  scales: {
-                    x: {
-                      grid: {
-                        display: false
-                      },
-                      ticks: {
-                        autoSkip: false,
-                        maxRotation: 45,
-                        minRotation: 45
-                      }
-                    },
-                    y: {
-                      beginAtZero: true,
-                      grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                      },
-                      ticks: {
-                        callback: function(value) {
-                          return value.toLocaleString();
-                        }
-                      }
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Issue Composition Pie Chart */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div style={{ height: '400px' }}>
-              <Doughnut 
-                data={pieChartData} 
-                options={{
-                  ...getChartOptions('Issue Composition', true),
-                  plugins: {
-                    ...getChartOptions('Issue Composition', true).plugins,
-                    tooltip: {
-                      callbacks: {
-                        label: function(context) {
-                          const label = context.label || '';
-                          const value = context.parsed;
-                          const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                          const percentage = ((value / total) * 100).toFixed(1);
-                          return `${label}: ${value} (${percentage}%)`;
-                        }
-                      }
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Trend Analysis Line Chart */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
-            <div style={{ height: '350px' }}>
-              <Line 
-                data={trendData} 
-                options={getChartOptions('Issue Trend Analysis', true)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Detailed Breakdown */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Detailed Breakdown by Category</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tabs.map(tab => {
-              const count = reportData[tab.id]?.length || 0;
-              const percentage = metrics.totalIssues > 0 ? ((count / metrics.totalIssues) * 100).toFixed(1) : 0;
-              
-              return (
-                <div key={tab.id} className="flex items-center p-4 bg-gray-50 rounded-lg">
-                  <div className="flex-shrink-0 mr-4">
-                    <div 
-                      className="w-12 h-12 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: `${tab.color}20` }}
-                    >
-                      <span className="text-xl">{tab.icon}</span>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{tab.label}</p>
-                    <p className="text-2xl font-bold" style={{ color: tab.color }}>{count}</p>
-                    <p className="text-xs text-gray-500">{percentage}% of total</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Insights and Recommendations */}
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            <span className="mr-2">💡</span>
-            AI-Powered Insights & Recommendations
-          </h3>
-          <div className="space-y-3">
-            {metrics.criticalIssues > 50 && (
-              <div className="flex items-start">
-                <span className="text-red-500 mr-3">⚠️</span>
-                <div>
-                  <p className="font-medium text-gray-900">High Critical Issue Count</p>
-                  <p className="text-sm text-gray-600">
-                    You have {metrics.criticalIssues} critical issues. Focus on unmapped items and null values first to improve data integrity.
-                  </p>
-                </div>
-              </div>
-            )}
-            {metrics.dataQualityScore < 70 && (
-              <div className="flex items-start">
-                <span className="text-yellow-500 mr-3">📊</span>
-                <div>
-                  <p className="font-medium text-gray-900">Data Quality Needs Improvement</p>
-                  <p className="text-sm text-gray-600">
-                    Your data quality score is {metrics.dataQualityScore}%. Consider implementing automated validation rules and mandatory field requirements.
-                  </p>
-                </div>
-              </div>
-            )}
-            {metrics.completionRate > 80 && (
-              <div className="flex items-start">
-                <span className="text-green-500 mr-3">✨</span>
-                <div>
-                  <p className="font-medium text-gray-900">Good Test Coverage</p>
-                  <p className="text-sm text-gray-600">
-                    Your completion rate of {metrics.completionRate}% is above average. Focus on maintaining this level while addressing the remaining gaps.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   // Pagination Component
@@ -1234,84 +779,6 @@ export default function Analytics() {
     )
   );
 
-  // Export Menu Component
-  const ExportMenu = () => (
-    <div ref={exportMenuRef} className="relative">
-      <button
-        onClick={() => setShowExportMenu(!showExportMenu)}
-        disabled={!reportViewed || isExporting}
-        className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
-          reportViewed && !isExporting
-            ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-        }`}
-      >
-        {isExporting ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-            Exporting...
-          </>
-        ) : (
-          <>
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Report
-            <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </>
-        )}
-      </button>
-
-      {showExportMenu && reportViewed && (
-        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-10">
-          <div className="p-2">
-            <button
-              onClick={() => {
-                setExportFormat('excel');
-                handleExport();
-              }}
-              className="w-full text-left px-4 py-3 hover:bg-green-50 rounded-md transition-colors flex items-center"
-            >
-              <div className="flex items-center flex-1">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M15.8,20H14L12,13.2L10,20H8.2L6,11H7.8L9,17.8L11,11H13L15,17.8L16.2,11H18L15.8,20M13,9V3.5L18.5,9H13Z"/>
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Export as Excel</p>
-                  <p className="text-xs text-gray-500">All tabs in one file (.xlsx)</p>
-                </div>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => {
-                setExportFormat('csv');
-                handleExport();
-              }}
-              className="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-md transition-colors flex items-center mt-1"
-            >
-              <div className="flex items-center flex-1">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,13H11V18H9V13H7V11H9V6H11V11H13V13M13,9V3.5L18.5,9H13Z"/>
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Export as CSV</p>
-                  <p className="text-xs text-gray-500">Combined data file (.csv)</p>
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
       {/* Header */}
@@ -1520,7 +987,29 @@ export default function Analytics() {
               <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
                 Export
               </label>
-              <ExportMenu />
+              <button
+                onClick={exportToExcel}
+                disabled={isExporting}
+                className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
+                  !isExporting
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {isExporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export to Excel
+                  </>
+                )}
+              </button>
             </div>
           )}
 
@@ -1546,85 +1035,41 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* Main Content - Reports with View Toggle */}
+      {/* Main Content - Reports Table View */}
       {reportViewed && (
         <div className="flex-1 bg-gray-50">
-          {/* View Mode Toggle */}
-          <div className="bg-white border-b border-gray-200 px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setViewMode('dashboard')}
-                  className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
-                    viewMode === 'dashboard'
-                      ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Dashboard View
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
-                    viewMode === 'table'
-                      ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Table View
-                </button>
-              </div>
-              <div className="text-sm text-gray-500">
-                <span className="font-medium">{selectedProject?.name}</span> - <span className="font-medium">{selectedRelease?.name}</span>
-              </div>
+          {/* Tab Navigation */}
+          <div className="bg-white border-b border-gray-200">
+            <div className="px-6">
+              <nav className="flex space-x-8 overflow-x-auto">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="mr-2 text-lg">{tab.icon}</span>
+                    {tab.label}
+                    <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                      {reportData[tab.id]?.length || 0}
+                    </span>
+                  </button>
+                ))}
+              </nav>
             </div>
           </div>
 
-          {/* Content based on view mode */}
-          {viewMode === 'dashboard' ? (
-            <DashboardView />
-          ) : (
-            <>
-              {/* Tab Navigation for Table View */}
-              <div className="bg-white border-b border-gray-200">
-                <div className="px-6">
-                  <nav className="flex space-x-8 overflow-x-auto">
-                    {tabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                          activeTab === tab.id
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <span className="mr-2 text-lg">{tab.icon}</span>
-                        {tab.label}
-                        <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                          {reportData[tab.id]?.length || 0}
-                        </span>
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-              </div>
-
-              {/* Tab Content */}
-              <div className="p-6">
-                <DataTable 
-                  data={reportData[activeTab]} 
-                  tabId={activeTab}
-                />
-              </div>
-            </>
-          )}
+          {/* Tab Content */}
+          <div className="p-6">
+            <DataTable 
+              data={reportData[activeTab]} 
+              tabId={activeTab}
+            />
+          </div>
         </div>
       )}
 
