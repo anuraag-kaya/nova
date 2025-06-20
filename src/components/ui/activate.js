@@ -81,7 +81,7 @@ export default function Analytics() {
     { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌', color: '#EC4899' }
   ];
 
-  // Operational tools configuration
+  // Operational tools configuration with real Zephyr API
   const operationalTools = [
     {
       id: 'JIRA',
@@ -90,7 +90,7 @@ export default function Analytics() {
       icon: '🛠️',
       color: 'from-blue-500 to-blue-600',
       bgHover: 'hover:from-blue-50/50',
-      apiBase: '/api/jira-data'
+      apiBase: '/api/jira-data' // Placeholder for now
     },
     {
       id: 'ZEPHYR',
@@ -99,7 +99,7 @@ export default function Analytics() {
       icon: '⚡',
       color: 'from-purple-500 to-purple-600',
       bgHover: 'hover:from-purple-50/50',
-      apiBase: '/api/zephyr-data'
+      apiBase: 'https://dev1-ls-svc-d-automation.apps.namgcbgtd23d.ecs.dyn.nsroot.net' // Real Zephyr API
     },
     {
       id: 'GAP_ANALYSIS',
@@ -108,14 +108,14 @@ export default function Analytics() {
       icon: '📊',
       color: 'from-amber-500 to-amber-600',
       bgHover: 'hover:from-amber-50/50',
-      apiBase: '/api/gap-analysis'
+      apiBase: '/api/gap-analysis' // Placeholder for now
     }
   ];
 
   // Get current API base path based on selected tool
   const getApiBasePath = () => {
     const tool = operationalTools.find(t => t.id === selectedTool);
-    return tool?.apiBase || '/api/zephyr-data';
+    return tool?.apiBase || '';
   };
 
   // Button enable states
@@ -214,14 +214,24 @@ export default function Analytics() {
     
     try {
       const apiBase = getApiBasePath();
-      const response = await fetch(`${apiBase}/projects`);
+      let url = '';
+      
+      if (selectedTool === 'ZEPHYR') {
+        // Real Zephyr API endpoint
+        url = `${apiBase}/zephyr-data/projects`;
+      } else {
+        // Placeholder endpoints for JIRA and GAP_ANALYSIS
+        url = `${apiBase}/projects`;
+      }
+      
+      const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('Failed to fetch projects');
+        throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       setProjects(data || []);
     } catch (err) {
-      setError('Failed to load projects. Please try again.');
+      setError(`Failed to load projects: ${err.message}`);
       console.error('Error fetching projects:', err);
     } finally {
       setLoadingProjects(false);
@@ -236,14 +246,24 @@ export default function Analytics() {
     
     try {
       const apiBase = getApiBasePath();
-      const response = await fetch(`${apiBase}/releases/${projectId}`);
+      let url = '';
+      
+      if (selectedTool === 'ZEPHYR') {
+        // Real Zephyr API endpoint
+        url = `${apiBase}/zephyr-data/releases/${projectId}`;
+      } else {
+        // Placeholder endpoints for JIRA and GAP_ANALYSIS
+        url = `${apiBase}/releases/${projectId}`;
+      }
+      
+      const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('Failed to fetch releases');
+        throw new Error(`Failed to fetch releases: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       setReleases(data || []);
     } catch (err) {
-      setError('Failed to load releases. Please try again.');
+      setError(`Failed to load releases: ${err.message}`);
       console.error('Error fetching releases:', err);
       setReleases([]);
     } finally {
@@ -279,8 +299,18 @@ export default function Analytics() {
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
       
+      let latestReportUrl = '';
+      
+      if (selectedTool === 'ZEPHYR') {
+        // Real Zephyr API endpoint
+        latestReportUrl = `${apiBase}/zephyr-data/latest-report/${projectId}/${releaseId}`;
+      } else {
+        // Placeholder endpoints for JIRA and GAP_ANALYSIS
+        latestReportUrl = `${apiBase}/latest-report/${projectId}/${releaseId}`;
+      }
+      
       // Call only the latest-report API
-      const latestReportResponse = await fetch(`${apiBase}/latest-report/${projectId}/${releaseId}`);
+      const latestReportResponse = await fetch(latestReportUrl);
       const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
 
       // Update only the lastRefresh timestamp
@@ -303,7 +333,7 @@ export default function Analytics() {
       setNotifications(prev => [newNotification, ...prev]);
       
     } catch (err) {
-      setError('Failed to generate report. Please try again.');
+      setError(`Failed to generate report: ${err.message}`);
       console.error('Error generating report:', err);
     } finally {
       setLoadingGenerateReport(false);
@@ -322,6 +352,30 @@ export default function Analytics() {
       const projectId = selectedProject.id;
       const releaseId = selectedRelease.id;
       
+      let apiPromises = [];
+      
+      if (selectedTool === 'ZEPHYR') {
+        // Real Zephyr API endpoints
+        apiPromises = [
+          fetch(`${apiBase}/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/zephyr-data/count-null-values/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/zephyr-data/no-steps-expected-results/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/zephyr-data/empty-test-steps/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
+        ];
+      } else {
+        // Placeholder endpoints for JIRA and GAP_ANALYSIS
+        apiPromises = [
+          fetch(`${apiBase}/unmapped-user-stories/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/unmapped-test-cases/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/count-null-values/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/no-steps-expected-results/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/empty-test-steps/${projectId}/${releaseId}`),
+          fetch(`${apiBase}/empty-expected-results/${projectId}/${releaseId}`)
+        ];
+      }
+      
       // Call all 6 data APIs simultaneously
       const [
         unmappedUserStoriesResponse,
@@ -330,22 +384,28 @@ export default function Analytics() {
         noStepsExpectedResultsResponse,
         emptyTestStepsResponse,
         emptyExpectedResultsResponse
-      ] = await Promise.all([
-        fetch(`${apiBase}/unmapped-user-stories/${projectId}/${releaseId}`),
-        fetch(`${apiBase}/unmapped-test-cases/${projectId}/${releaseId}`),
-        fetch(`${apiBase}/count-null-values/${projectId}/${releaseId}`),
-        fetch(`${apiBase}/no-steps-expected-results/${projectId}/${releaseId}`),
-        fetch(`${apiBase}/empty-test-steps/${projectId}/${releaseId}`),
-        fetch(`${apiBase}/empty-expected-results/${projectId}/${releaseId}`)
-      ]);
+      ] = await Promise.all(apiPromises);
 
-      // Parse responses
-      const unmappedUserStories = unmappedUserStoriesResponse.ok ? await unmappedUserStoriesResponse.json() : [];
-      const unmappedTestCases = unmappedTestCasesResponse.ok ? await unmappedTestCasesResponse.json() : [];
-      const countNullValues = countNullValuesResponse.ok ? await countNullValuesResponse.json() : [];
-      const noStepsExpectedResults = noStepsExpectedResultsResponse.ok ? await noStepsExpectedResultsResponse.json() : [];
-      const emptyTestSteps = emptyTestStepsResponse.ok ? await emptyTestStepsResponse.json() : [];
-      const emptyExpectedResults = emptyExpectedResultsResponse.ok ? await emptyExpectedResultsResponse.json() : [];
+      // Parse responses with error handling
+      const parseResponse = async (response, name) => {
+        if (!response.ok) {
+          console.warn(`Failed to fetch ${name}: ${response.status} ${response.statusText}`);
+          return [];
+        }
+        try {
+          return await response.json();
+        } catch (err) {
+          console.warn(`Failed to parse ${name} response:`, err);
+          return [];
+        }
+      };
+
+      const unmappedUserStories = await parseResponse(unmappedUserStoriesResponse, 'unmapped user stories');
+      const unmappedTestCases = await parseResponse(unmappedTestCasesResponse, 'unmapped test cases');
+      const countNullValues = await parseResponse(countNullValuesResponse, 'count null values');
+      const noStepsExpectedResults = await parseResponse(noStepsExpectedResultsResponse, 'no steps expected results');
+      const emptyTestSteps = await parseResponse(emptyTestStepsResponse, 'empty test steps');
+      const emptyExpectedResults = await parseResponse(emptyExpectedResultsResponse, 'empty expected results');
 
       // Update state with all report data
       setReportData(prev => ({
@@ -372,7 +432,7 @@ export default function Analytics() {
       setNotifications(prev => [newNotification, ...prev]);
       
     } catch (err) {
-      setError('Failed to load report data. Please try again.');
+      setError(`Failed to load report data: ${err.message}`);
       console.error('Error loading report data:', err);
     } finally {
       setLoadingViewReport(false);
@@ -719,7 +779,7 @@ export default function Analytics() {
               className="text-gray-500 hover:text-gray-700"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.3 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
               </svg>
             </button>
           </div>
