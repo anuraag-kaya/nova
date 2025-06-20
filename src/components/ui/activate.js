@@ -17,7 +17,7 @@ export default function Analytics() {
   const [isOperationalExpanded, setIsOperationalExpanded] = useState(true);
   
   // Operational tool selection
-  const [selectedTool, setSelectedTool] = useState(null); // null, 'JIRA', 'ZEPHYR', 'GAP_ANALYSIS'
+  const [selectedTool, setSelectedTool] = useState(null);
   
   // Form state
   const [projects, setProjects] = useState([]);
@@ -44,10 +44,10 @@ export default function Analytics() {
   const [reportViewed, setReportViewed] = useState(false);
   
   // View state
-  const [viewMode, setViewMode] = useState('table'); // Default to table view
+  const [viewMode, setViewMode] = useState('table');
   
   // Tab and pagination state
-  const [activeTab, setActiveTab] = useState('unmappedUserStories');
+  const [activeTab, setActiveTab] = useState('emptyExpectedResults');
   const [currentPages, setCurrentPages] = useState({
     unmappedUserStories: 1,
     unmappedTestCases: 1,
@@ -81,7 +81,7 @@ export default function Analytics() {
     { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌', color: '#EC4899' }
   ];
 
-  // Operational tools configuration with real Zephyr API
+  // Operational tools configuration
   const operationalTools = [
     {
       id: 'JIRA',
@@ -90,7 +90,7 @@ export default function Analytics() {
       icon: '🛠️',
       color: 'from-blue-500 to-blue-600',
       bgHover: 'hover:from-blue-50/50',
-      apiBase: '/api/jira-data' // Placeholder for now
+      apiBase: '/api/jira-data'
     },
     {
       id: 'ZEPHYR',
@@ -99,7 +99,7 @@ export default function Analytics() {
       icon: '⚡',
       color: 'from-purple-500 to-purple-600',
       bgHover: 'hover:from-purple-50/50',
-      apiBase: 'https://dev1-ls-svc-d-automation.apps.namgcbgtd23d.ecs.dyn.nsroot.net' // Real Zephyr API
+      apiBase: 'https://dev1-ls-svc-d-automation.apps.namgcbgtd23d.ecs.dyn.nsroot.net'
     },
     {
       id: 'GAP_ANALYSIS',
@@ -108,7 +108,7 @@ export default function Analytics() {
       icon: '📊',
       color: 'from-amber-500 to-amber-600',
       bgHover: 'hover:from-amber-50/50',
-      apiBase: '/api/gap-analysis' // Placeholder for now
+      apiBase: '/api/gap-analysis'
     }
   ];
 
@@ -124,16 +124,15 @@ export default function Analytics() {
   const isGenerateReportEnabled = isProjectSelected && isReleaseSelected && !loadingGenerateReport && !loadingViewReport;
   const isViewReportEnabled = reportGenerated && !loadingGenerateReport && !loadingViewReport;
 
-  // Update unread count whenever notifications change
+  // Update unread count
   useEffect(() => {
     const count = notifications.filter(notification => !notification.read).length;
     setUnreadNotifications(count);
   }, [notifications]);
 
-  // Reset all states when tool changes
+  // Reset states when tool changes
   useEffect(() => {
     if (selectedTool) {
-      // Reset all form and report states
       setProjects([]);
       setReleases([]);
       setSelectedProject(null);
@@ -150,11 +149,8 @@ export default function Analytics() {
         emptyExpectedResults: []
       });
       setError(null);
-      
-      // Fetch projects for the selected tool
       fetchProjects();
       
-      // Add notification for tool selection
       const tool = operationalTools.find(t => t.id === selectedTool);
       if (tool) {
         const newNotification = {
@@ -217,10 +213,8 @@ export default function Analytics() {
       let url = '';
       
       if (selectedTool === 'ZEPHYR') {
-        // Real Zephyr API endpoint
         url = `${apiBase}/zephyr-data/projects`;
       } else {
-        // Placeholder endpoints for JIRA and GAP_ANALYSIS
         url = `${apiBase}/projects`;
       }
       
@@ -249,10 +243,8 @@ export default function Analytics() {
       let url = '';
       
       if (selectedTool === 'ZEPHYR') {
-        // Real Zephyr API endpoint
         url = `${apiBase}/zephyr-data/releases/${projectId}`;
       } else {
-        // Placeholder endpoints for JIRA and GAP_ANALYSIS
         url = `${apiBase}/releases/${projectId}`;
       }
       
@@ -273,7 +265,6 @@ export default function Analytics() {
 
   const handleProjectSelect = (project) => {
     setSelectedProject(project);
-    
     if (project) {
       fetchReleases(project.id);
     }
@@ -287,7 +278,6 @@ export default function Analytics() {
     setSelectedTool(toolId);
   };
 
-  // Step 1: Generate Report (Only latest-report API)
   const handleGenerateReport = async () => {
     if (!selectedProject || !selectedRelease || !selectedTool) return;
     
@@ -302,18 +292,14 @@ export default function Analytics() {
       let latestReportUrl = '';
       
       if (selectedTool === 'ZEPHYR') {
-        // Real Zephyr API endpoint
         latestReportUrl = `${apiBase}/zephyr-data/latest-report/${projectId}/${releaseId}`;
       } else {
-        // Placeholder endpoints for JIRA and GAP_ANALYSIS
         latestReportUrl = `${apiBase}/latest-report/${projectId}/${releaseId}`;
       }
       
-      // Call only the latest-report API
       const latestReportResponse = await fetch(latestReportUrl);
       const latestReport = latestReportResponse.ok ? await latestReportResponse.json() : null;
 
-      // Update only the lastRefresh timestamp
       setReportData(prev => ({
         ...prev,
         lastRefresh: latestReport?.created_at || new Date().toISOString()
@@ -321,7 +307,6 @@ export default function Analytics() {
 
       setReportGenerated(true);
 
-      // Add notification for successful report generation
       const newNotification = {
         id: Date.now(),
         title: "Report Generated",
@@ -340,7 +325,6 @@ export default function Analytics() {
     }
   };
 
-  // Step 2: View Report (All 6 data APIs)
   const handleViewReport = async () => {
     if (!selectedProject || !selectedRelease || !reportGenerated || !selectedTool) return;
     
@@ -355,7 +339,6 @@ export default function Analytics() {
       let apiPromises = [];
       
       if (selectedTool === 'ZEPHYR') {
-        // Real Zephyr API endpoints
         apiPromises = [
           fetch(`${apiBase}/zephyr-data/unmapped-user-stories/${projectId}/${releaseId}`),
           fetch(`${apiBase}/zephyr-data/unmapped-test-cases/${projectId}/${releaseId}`),
@@ -365,7 +348,6 @@ export default function Analytics() {
           fetch(`${apiBase}/zephyr-data/empty-expected-results/${projectId}/${releaseId}`)
         ];
       } else {
-        // Placeholder endpoints for JIRA and GAP_ANALYSIS
         apiPromises = [
           fetch(`${apiBase}/unmapped-user-stories/${projectId}/${releaseId}`),
           fetch(`${apiBase}/unmapped-test-cases/${projectId}/${releaseId}`),
@@ -376,7 +358,6 @@ export default function Analytics() {
         ];
       }
       
-      // Call all 6 data APIs simultaneously
       const [
         unmappedUserStoriesResponse,
         unmappedTestCasesResponse,
@@ -386,7 +367,6 @@ export default function Analytics() {
         emptyExpectedResultsResponse
       ] = await Promise.all(apiPromises);
 
-      // Parse responses with error handling
       const parseResponse = async (response, name) => {
         if (!response.ok) {
           console.warn(`Failed to fetch ${name}: ${response.status} ${response.statusText}`);
@@ -407,9 +387,8 @@ export default function Analytics() {
       const emptyTestSteps = await parseResponse(emptyTestStepsResponse, 'empty test steps');
       const emptyExpectedResults = await parseResponse(emptyExpectedResultsResponse, 'empty expected results');
 
-      // Update state with all report data
       setReportData(prev => ({
-        ...prev, // Keep the lastRefresh from generate step
+        ...prev,
         unmappedUserStories: unmappedUserStories || [],
         unmappedTestCases: unmappedTestCases || [],
         countNullValues: countNullValues || [],
@@ -420,7 +399,6 @@ export default function Analytics() {
 
       setReportViewed(true);
 
-      // Add notification for successful report viewing
       const newNotification = {
         id: Date.now(),
         title: "Report Data Loaded",
@@ -439,7 +417,6 @@ export default function Analytics() {
     }
   };
 
-  // Pagination functions
   const getCurrentPageData = (data, page) => {
     const startIndex = (page - 1) * recordsPerPage;
     return data.slice(startIndex, startIndex + recordsPerPage);
@@ -456,7 +433,6 @@ export default function Analytics() {
     }));
   };
 
-  // Format date function
   const formatDateTime = (dateString) => {
     if (!dateString) return null;
     
@@ -475,7 +451,6 @@ export default function Analytics() {
     }
   };
 
-  // Pagination Component
   const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
 
@@ -568,7 +543,6 @@ export default function Analytics() {
     );
   };
 
-  // Enhanced Data Table Component with Pagination
   const DataTable = ({ data, tabId }) => {
     const currentPage = currentPages[tabId];
     const totalPages = getTotalPages(data);
@@ -590,7 +564,6 @@ export default function Analytics() {
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        {/* Table Header */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
@@ -602,7 +575,6 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -637,7 +609,6 @@ export default function Analytics() {
           </table>
         </div>
 
-        {/* Pagination */}
         <PaginationControls
           currentPage={currentPage}
           totalPages={totalPages}
@@ -671,7 +642,6 @@ export default function Analytics() {
     setUnreadNotifications(0);
   };
 
-  // Custom Dropdown Component
   const CustomDropdown = ({ 
     label, 
     options, 
@@ -683,9 +653,21 @@ export default function Analytics() {
     icon 
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+          setIsOpen(false);
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     return (
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           {label}
         </label>
@@ -754,7 +736,6 @@ export default function Analytics() {
     );
   };
 
-  // Notifications component
   const NotificationsDropdown = () => (
     showNotifications && (
       <div className="absolute right-12 top-20 w-96 bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80vh">
@@ -855,37 +836,32 @@ export default function Analytics() {
     )
   );
 
-  // Enhanced Beautiful Left Panel Component with Tool Selection
   const BeautifulPanel = () => (
     <div 
-      className={`bg-white/95 backdrop-blur-xl border-r border-gray-200/50 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+      className={`bg-white border-r border-gray-200 transition-all duration-300 ${
         isPanelCollapsed ? 'w-14' : 'w-80'
-      } flex flex-col shadow-[0_0_15px_rgba(0,0,0,0.05)] relative overflow-hidden`}
+      } flex flex-col shadow-sm relative`}
       style={{ 
-        transform: isPanelCollapsed ? 'translateX(0)' : 'translateX(0)',
-        willChange: 'width, transform'
+        minWidth: isPanelCollapsed ? '56px' : '320px',
+        maxWidth: isPanelCollapsed ? '56px' : '320px'
       }}
     >
-      {/* Subtle gradient overlay for depth */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-white/30 pointer-events-none" />
-      
-      {/* Panel Header with Glass Effect */}
-      <div className={`relative z-10 flex items-center justify-between h-14 px-4 bg-gradient-to-r from-white/90 to-gray-50/90 backdrop-blur-md border-b border-gray-200/50 ${
+      <div className={`flex items-center justify-between h-14 px-4 bg-white border-b border-gray-200 ${
         isPanelCollapsed ? 'px-2' : 'px-5'
-      } transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]`}>
+      }`}>
         {!isPanelCollapsed && (
           <>
-            <div className="flex items-center space-x-2 opacity-100 transition-opacity duration-500 ease-in-out">
-              <span className="text-sm font-semibold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent tracking-wide">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-semibold text-gray-700 tracking-wide">
                 ANALYTICS SUITE
               </span>
             </div>
             <button
               onClick={() => setIsPanelCollapsed(true)}
-              className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-105"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
               aria-label="Collapse panel"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
+              <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500">
                 <path fill="currentColor" d="M11 8L6 13V3z" />
               </svg>
             </button>
@@ -894,48 +870,42 @@ export default function Analytics() {
         {isPanelCollapsed && (
           <button
             onClick={() => setIsPanelCollapsed(false)}
-            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm mx-auto transform hover:scale-105"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 mx-auto"
             aria-label="Expand panel"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
+            <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-500">
               <path fill="currentColor" d="M5 8L10 3v10z" />
             </svg>
           </button>
         )}
       </div>
 
-      {/* Panel Sections with Ultra-Smooth Animations */}
       {!isPanelCollapsed && (
-        <div 
-          className="flex-grow overflow-y-auto overflow-x-hidden relative z-10 opacity-100 transition-opacity duration-700 ease-in-out"
-          style={{ transitionDelay: isPanelCollapsed ? '0ms' : '200ms' }}
-        >
-          {/* Executive Section */}
+        <div className="flex-grow overflow-y-auto">
           <div className="border-b border-gray-100">
             <button
               onClick={() => setIsExecutiveExpanded(!isExecutiveExpanded)}
-              className="w-full flex items-center px-5 py-4 hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-500 group"
+              className="w-full flex items-center px-5 py-4 hover:bg-gray-50 transition-all duration-200"
             >
-              <div className={`mr-3 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExecutiveExpanded ? 'rotate-90' : ''}`}>
-                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400 group-hover:text-blue-500 transition-colors duration-300">
+              <div className={`mr-3 transition-transform duration-200 ${isExecutiveExpanded ? 'rotate-90' : ''}`}>
+                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400">
                   <path fill="currentColor" d="M8 6l4 4-4 4z" />
                 </svg>
               </div>
               <div className="flex items-center space-x-3 flex-1">
-                <span className="text-2xl transition-all duration-300 group-hover:scale-110">💼</span>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-300">
+                <span className="text-2xl">💼</span>
+                <span className="text-sm font-medium text-gray-700">
                   EXECUTIVE
                 </span>
               </div>
             </button>
             <div 
-              className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                isExecutiveExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+              className={`overflow-hidden transition-all duration-300 ${
+                isExecutiveExpanded ? 'max-h-96' : 'max-h-0'
               }`}
-              style={{ transitionDelay: isExecutiveExpanded ? '100ms' : '0ms' }}
             >
               <div className="px-5 pl-14 py-3">
-                <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-200/50 transform transition-all duration-500 hover:scale-[1.02] hover:shadow-sm">
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <p className="text-xs text-gray-500 leading-relaxed">
                     Executive dashboards coming soon
                   </p>
@@ -944,53 +914,48 @@ export default function Analytics() {
             </div>
           </div>
 
-          {/* Operational Section with Tools */}
           <div className="border-b border-gray-100">
             <button
               onClick={() => setIsOperationalExpanded(!isOperationalExpanded)}
-              className="w-full flex items-center px-5 py-4 hover:bg-gradient-to-r hover:from-green-50/50 hover:to-transparent transition-all duration-500 group"
+              className="w-full flex items-center px-5 py-4 hover:bg-gray-50 transition-all duration-200"
             >
-              <div className={`mr-3 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOperationalExpanded ? 'rotate-90' : ''}`}>
-                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400 group-hover:text-green-500 transition-colors duration-300">
+              <div className={`mr-3 transition-transform duration-200 ${isOperationalExpanded ? 'rotate-90' : ''}`}>
+                <svg width="20" height="20" viewBox="0 0 20 20" className="text-gray-400">
                   <path fill="currentColor" d="M8 6l4 4-4 4z" />
                 </svg>
               </div>
               <div className="flex items-center space-x-3 flex-1">
-                <span className="text-2xl transition-all duration-300 group-hover:scale-110">🗂</span>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-300">
+                <span className="text-2xl">🗂</span>
+                <span className="text-sm font-medium text-gray-700">
                   OPERATIONAL
                 </span>
               </div>
             </button>
             <div 
-              className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                isOperationalExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+              className={`overflow-hidden transition-all duration-300 ${
+                isOperationalExpanded ? 'max-h-[500px]' : 'max-h-0'
               }`}
-              style={{ transitionDelay: isOperationalExpanded ? '100ms' : '0ms' }}
             >
               <div className="px-5 pl-14 py-3 space-y-2">
                 {operationalTools.map((tool) => (
                   <button
                     key={tool.id}
                     onClick={() => handleToolSelect(tool.id)}
-                    className={`w-full group relative overflow-hidden rounded-xl border transition-all duration-500 transform hover:scale-[1.02] hover:shadow-md ${
+                    className={`w-full relative overflow-hidden rounded-xl border transition-all duration-200 ${
                       selectedTool === tool.id
                         ? 'bg-gradient-to-br from-white to-gray-50 border-gray-300 shadow-sm'
-                        : 'bg-white border-gray-200/50 hover:border-gray-300'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    {/* Active indicator */}
                     {selectedTool === tool.id && (
                       <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-400 to-blue-600" />
                     )}
                     
                     <div className="relative z-10 p-4 flex items-center space-x-3">
-                      <span className={`text-3xl transition-all duration-300 group-hover:scale-110 ${
-                        selectedTool === tool.id ? 'scale-110' : ''
-                      }`}>{tool.icon}</span>
+                      <span className="text-3xl">{tool.icon}</span>
                       <div className="flex-1 text-left">
-                        <h4 className={`text-sm font-semibold transition-colors duration-300 ${
-                          selectedTool === tool.id ? 'text-gray-900' : 'text-gray-700 group-hover:text-gray-900'
+                        <h4 className={`text-sm font-semibold ${
+                          selectedTool === tool.id ? 'text-gray-900' : 'text-gray-700'
                         }`}>
                           {tool.name}
                         </h4>
@@ -1006,9 +971,6 @@ export default function Analytics() {
                         </div>
                       )}
                     </div>
-                    
-                    {/* Hover effect gradient */}
-                    <div className={`absolute inset-0 bg-gradient-to-r ${tool.bgHover} opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
                   </button>
                 ))}
               </div>
@@ -1017,18 +979,14 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* Collapsed State Icons with Smooth Transitions */}
       {isPanelCollapsed && (
-        <div 
-          className="flex-grow flex flex-col items-center py-6 space-y-6 opacity-100 transition-opacity duration-500 ease-in-out"
-          style={{ transitionDelay: isPanelCollapsed ? '300ms' : '0ms' }}
-        >
+        <div className="flex-grow flex flex-col items-center py-6 space-y-6">
           <button
             onClick={() => {
               setIsPanelCollapsed(false);
               setIsExecutiveExpanded(true);
             }}
-            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-110"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
             title="Executive"
           >
             <span className="text-2xl">💼</span>
@@ -1039,13 +997,12 @@ export default function Analytics() {
               setIsPanelCollapsed(false);
               setIsOperationalExpanded(true);
             }}
-            className="group p-2 hover:bg-gray-100/80 rounded-lg transition-all duration-300 hover:shadow-sm transform hover:scale-110"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
             title="Operational"
           >
             <span className="text-2xl">🗂</span>
           </button>
           
-          {/* Selected Tool Indicator in Collapsed State */}
           {selectedTool && (
             <div className="mt-auto mb-4">
               {operationalTools.map((tool) => (
@@ -1066,11 +1023,9 @@ export default function Analytics() {
     </div>
   );
 
-  // Welcome Screen Component
   const WelcomeScreen = () => (
     <div className="flex-1 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
       <div className="max-w-2xl mx-auto text-center px-8">
-        {/* Animated Icon */}
         <div className="mb-8 relative">
           <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse">
             <span className="text-6xl">📊</span>
@@ -1078,7 +1033,6 @@ export default function Analytics() {
           <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-400 rounded-full animate-ping"></div>
         </div>
         
-        {/* Welcome Text */}
         <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-4">
           Welcome to ASTRA Analytics Suite
         </h1>
@@ -1088,7 +1042,6 @@ export default function Analytics() {
           in the left panel. Choose between JIRA, Zephyr, or Gap Analysis to begin generating comprehensive reports.
         </p>
         
-        {/* Feature Cards */}
         <div className="grid grid-cols-3 gap-6 mt-12">
           {operationalTools.map((tool) => (
             <div
@@ -1111,7 +1064,6 @@ export default function Analytics() {
           ))}
         </div>
         
-        {/* Instructions */}
         <div className="mt-12 text-sm text-gray-500">
           <p>📍 Click on any tool above or use the left panel to navigate</p>
         </div>
@@ -1121,9 +1073,7 @@ export default function Analytics() {
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
-      {/* Header */}
       <header className={`flex justify-between items-center px-4 py-2 h-20 shadow-md ${darkMode ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}>
-        {/* Logo */}
         <div className="flex items-center ml-5">
           <div className="flex items-center">
             <img 
@@ -1137,9 +1087,7 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Header Buttons */}
         <div className="flex items-center space-x-3">
-          {/* Notification Icon with badge */}
           <div className="relative">
             <button 
               className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
@@ -1156,7 +1104,6 @@ export default function Analytics() {
             </button>
           </div>
 
-          {/* Profile Button */}
           <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors border border-gray-200"
@@ -1168,7 +1115,6 @@ export default function Analytics() {
         </div>
       </header>
 
-      {/* Menu Bar */}
       <div className="bg-[#f0f5f7] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.07)] relative z-10 border-b border-gray-200">
         <div className="pl-4">
           <nav className="flex h-10">
@@ -1196,10 +1142,8 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Notifications Dropdown */}
       <NotificationsDropdown />
 
-      {/* Profile Menu */}
       {showProfileMenu && (
         <div 
           className="fixed right-4 top-12 w-48 bg-white shadow-xl rounded-md z-50 border border-gray-200 overflow-hidden"
@@ -1234,7 +1178,6 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* Overlay for profile menu */}
       {showProfileMenu && (
         <div 
           className="fixed inset-0 bg-transparent z-40"
@@ -1242,18 +1185,13 @@ export default function Analytics() {
         />
       )}
 
-      {/* Main Layout with VSCode Panel extending to footer */}
-      <div className="flex flex-1">
-        {/* Beautiful Apple-inspired Left Panel */}
+      <div className="flex flex-1 overflow-hidden">
         <BeautifulPanel />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col bg-gray-50">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTool ? (
             <>
-              {/* Control Bar - Progressive Enable Flow */}
               <div className="bg-white border-b border-gray-200 px-6 py-4">
-                {/* Tool Indicator */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     {operationalTools.map((tool) => (
@@ -1285,7 +1223,6 @@ export default function Analytics() {
                 </div>
 
                 <div className="flex items-end gap-6">
-                  {/* Project Dropdown - Always Enabled */}
                   <div className="flex-1 max-w-xs">
                     <CustomDropdown
                       label="Select Project"
@@ -1298,7 +1235,6 @@ export default function Analytics() {
                     />
                   </div>
 
-                  {/* Release Dropdown - Enabled only after project selection */}
                   <div className="flex-1 max-w-xs">
                     <CustomDropdown
                       label="Select Release"
@@ -1311,7 +1247,6 @@ export default function Analytics() {
                     />
                   </div>
 
-                  {/* Generate Report Button - Enabled after both selections */}
                   <div className="flex flex-col">
                     <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
                       Action
@@ -1336,7 +1271,6 @@ export default function Analytics() {
                     </button>
                   </div>
 
-                  {/* View Report Button - Enabled after generate report */}
                   <div className="flex flex-col">
                     <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
                       View
@@ -1361,7 +1295,6 @@ export default function Analytics() {
                     </button>
                   </div>
 
-                  {/* Last Refresh Info - Shows after generate */}
                   {reportGenerated && reportData.lastRefresh && (
                     <div className="flex flex-col justify-end">
                       <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
@@ -1372,7 +1305,6 @@ export default function Analytics() {
                   )}
                 </div>
 
-                {/* Error Display */}
                 {error && (
                   <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
                     <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1383,10 +1315,8 @@ export default function Analytics() {
                 )}
               </div>
 
-              {/* Main Content - Reports Table View */}
               {reportViewed && (
-                <div className="flex-1 bg-gray-50">
-                  {/* Tab Navigation */}
+                <div className="flex-1 bg-gray-50 overflow-hidden flex flex-col">
                   <div className="bg-white border-b border-gray-200">
                     <div className="px-6">
                       <nav className="flex space-x-8 overflow-x-auto">
@@ -1404,7 +1334,7 @@ export default function Analytics() {
                             {tab.label}
                             <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
                               {reportData[tab.id]?.length || 0}
-                            </span>
+                              </span>
                           </button>
                         ))}
                       </nav>
