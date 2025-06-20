@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from 'next/navigation';
+import { exportToExcel, exportAllToCSV } from "./utils/exportUtils";
 
 export default function Analytics() {
   const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef(null);
   
   // Left panel states
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -123,6 +126,19 @@ export default function Analytics() {
   const isReleaseSelected = !!selectedRelease;
   const isGenerateReportEnabled = isProjectSelected && isReleaseSelected && !loadingGenerateReport && !loadingViewReport;
   const isViewReportEnabled = reportGenerated && !loadingGenerateReport && !loadingViewReport;
+  const isExportEnabled = reportViewed && reportData && Object.values(reportData).some(data => Array.isArray(data) && data.length > 0);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Update unread count
   useEffect(() => {
@@ -415,6 +431,52 @@ export default function Analytics() {
     } finally {
       setLoadingViewReport(false);
     }
+  };
+
+  const handleExportToExcel = () => {
+    if (!isExportEnabled) return;
+    
+    const metadata = {
+      projectName: selectedProject.name.replace(/[/\\?%*:|"<>]/g, '-'),
+      releaseName: selectedRelease.name.replace(/[/\\?%*:|"<>]/g, '-'),
+      tabs: tabs
+    };
+    
+    exportToExcel(reportData, metadata);
+    setShowExportMenu(false);
+    
+    const newNotification = {
+      id: Date.now(),
+      title: "Export Successful",
+      message: `Excel file exported with all ${tabs.length} tabs`,
+      date: new Date().toLocaleString(),
+      read: false,
+      type: "success"
+    };
+    setNotifications(prev => [newNotification, ...prev]);
+  };
+
+  const handleExportToCSV = () => {
+    if (!isExportEnabled) return;
+    
+    const metadata = {
+      projectName: selectedProject.name.replace(/[/\\?%*:|"<>]/g, '-'),
+      releaseName: selectedRelease.name.replace(/[/\\?%*:|"<>]/g, '-'),
+      tabs: tabs
+    };
+    
+    exportAllToCSV(reportData, metadata);
+    setShowExportMenu(false);
+    
+    const newNotification = {
+      id: Date.now(),
+      title: "Export Successful",
+      message: `${tabs.length} CSV files exported`,
+      date: new Date().toLocaleString(),
+      read: false,
+      type: "success"
+    };
+    setNotifications(prev => [newNotification, ...prev]);
   };
 
   const getCurrentPageData = (data, page) => {
@@ -735,6 +797,56 @@ export default function Analytics() {
       </div>
     );
   };
+
+  const ExportDropdown = () => (
+    <div className="relative" ref={exportMenuRef}>
+      <button
+        onClick={() => setShowExportMenu(!showExportMenu)}
+        disabled={!isExportEnabled}
+        className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center ${
+          isExportEnabled
+            ? 'bg-gray-600 text-white hover:bg-gray-700 shadow-md hover:shadow-lg'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+        }`}
+      >
+        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Export
+        <svg 
+          className={`w-4 h-4 ml-1 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {showExportMenu && isExportEnabled && (
+        <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+          <button
+            onClick={handleExportToExcel}
+            className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center"
+          >
+            <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export to Excel (.xlsx)
+          </button>
+          <button
+            onClick={handleExportToCSV}
+            className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center border-t border-gray-100"
+          >
+            <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export to CSV
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   const NotificationsDropdown = () => (
     showNotifications && (
@@ -1303,6 +1415,10 @@ export default function Analytics() {
                       </div>
                     </div>
                   )}
+
+                  <div className="flex-1"></div>
+
+                  <ExportDropdown />
                 </div>
 
                 {error && (
@@ -1334,14 +1450,13 @@ export default function Analytics() {
                             {tab.label}
                             <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
                               {reportData[tab.id]?.length || 0}
-                              </span>
+                            </span>
                           </button>
                         ))}
                       </nav>
                     </div>
                   </div>
 
-                  {/* Tab Content */}
                   <div className="p-6">
                     <DataTable 
                       data={reportData[activeTab]} 
@@ -1351,7 +1466,6 @@ export default function Analytics() {
                 </div>
               )}
 
-              {/* Empty States */}
               {!reportGenerated && (
                 <div className="flex-1 bg-gray-50 flex items-center justify-center">
                   <div className="text-center">
@@ -1390,7 +1504,6 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="w-full bg-[#222222] text-white text-center p-2 flex justify-between items-center border-t border-gray-800">
         <div className="text-xs text-gray-400 ml-4">v0.9.0</div>
         <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
