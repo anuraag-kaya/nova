@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from 'next/navigation';
 import { exportToExcel, exportAllToCSV } from "./utils/exportUtils";
+import ReactECharts from 'echarts-for-react';
 
 export default function Analytics() {
   const [darkMode, setDarkMode] = useState(false);
@@ -511,6 +512,284 @@ export default function Analytics() {
     } catch (err) {
       return dateString;
     }
+  };
+
+  const ViewModeToggle = () => (
+    <div className="flex items-center bg-gray-100 rounded-lg p-1">
+      <button
+        onClick={() => setViewMode('table')}
+        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          viewMode === 'table'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900'
+        }`}
+      >
+        <div className="flex items-center space-x-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>Table</span>
+        </div>
+      </button>
+      <button
+        onClick={() => setViewMode('chart')}
+        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          viewMode === 'chart'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900'
+        }`}
+      >
+        <div className="flex items-center space-x-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <span>Chart</span>
+        </div>
+      </button>
+    </div>
+  );
+
+  const ChartView = ({ data, tabId }) => {
+    const tab = tabs.find(t => t.id === tabId);
+    
+    if (!data || data.length === 0) {
+      return (
+        <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <div className="text-center">
+            <div className="text-gray-400 text-6xl mb-4">📊</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+            <p className="text-gray-500">No chart data to display for this report.</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Different chart configurations based on the tab
+    const getChartOption = () => {
+      const commonOptions = {
+        title: {
+          text: `${tab.label} Analysis`,
+          subtext: `${selectedProject?.name || ''} - ${selectedRelease?.name || ''}`,
+          left: 'center',
+          top: 20,
+          textStyle: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: '#1f2937'
+          },
+          subtextStyle: {
+            fontSize: 14,
+            color: '#6b7280'
+          }
+        },
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#e5e7eb',
+          borderWidth: 1,
+          textStyle: {
+            color: '#1f2937'
+          }
+        },
+        toolbox: {
+          feature: {
+            dataView: { show: true, readOnly: false },
+            saveAsImage: { show: true, title: 'Save as Image' },
+            restore: { show: true }
+          },
+          right: 20,
+          top: 20
+        }
+      };
+
+      // For unmapped items, use pie chart
+      if (tabId === 'unmappedUserStories' || tabId === 'unmappedTestCases') {
+        const groupedData = data.reduce((acc, item) => {
+          const key = item.status || 'Unknown';
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+
+        return {
+          ...commonOptions,
+          legend: {
+            bottom: 20,
+            left: 'center',
+            data: Object.keys(groupedData)
+          },
+          series: [
+            {
+              name: tab.label,
+              type: 'pie',
+              radius: ['40%', '70%'],
+              center: ['50%', '50%'],
+              data: Object.entries(groupedData).map(([name, value]) => ({
+                name,
+                value,
+                itemStyle: {
+                  color: name === 'Active' ? '#10b981' : 
+                        name === 'Inactive' ? '#ef4444' : 
+                        name === 'Pending' ? '#f59e0b' : '#6b7280'
+                }
+              })),
+              emphasis: {
+                itemStyle: {
+                  shadowBlur: 10,
+                  shadowOffsetX: 0,
+                  shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+              },
+              label: {
+                formatter: '{b}: {c} ({d}%)'
+              }
+            }
+          ]
+        };
+      }
+
+      // For null values, use bar chart
+      if (tabId === 'countNullValues') {
+        const columns = Object.keys(data[0] || {});
+        const nullCounts = columns.map(col => 
+          data.filter(row => row[col] === null || row[col] === '').length
+        );
+
+        return {
+          ...commonOptions,
+          xAxis: {
+            type: 'category',
+            data: columns,
+            axisLabel: {
+              rotate: 45,
+              interval: 0
+            }
+          },
+          yAxis: {
+            type: 'value',
+            name: 'Null Count',
+            nameLocation: 'middle',
+            nameGap: 50
+          },
+          series: [
+            {
+              name: 'Null Values',
+              type: 'bar',
+              data: nullCounts,
+              itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: '#f59e0b' },
+                  { offset: 1, color: '#f97316' }
+                ])
+              },
+              label: {
+                show: true,
+                position: 'top',
+                formatter: '{c}'
+              }
+            }
+          ],
+          grid: {
+            bottom: 100
+          }
+        };
+      }
+
+      // For empty test steps/results, use stacked bar
+      if (tabId === 'emptyTestSteps' || tabId === 'emptyExpectedResults' || tabId === 'noStepsExpectedResults') {
+        const priorities = ['High', 'Medium', 'Low'];
+        const priorityData = priorities.map(priority => ({
+          name: priority,
+          type: 'bar',
+          stack: 'total',
+          data: [data.filter(item => item.priority === priority).length],
+          itemStyle: {
+            color: priority === 'High' ? '#ef4444' : 
+                   priority === 'Medium' ? '#f59e0b' : '#10b981'
+          }
+        }));
+
+        return {
+          ...commonOptions,
+          legend: {
+            data: priorities,
+            bottom: 20
+          },
+          xAxis: {
+            type: 'category',
+            data: [tab.label]
+          },
+          yAxis: {
+            type: 'value',
+            name: 'Count',
+            nameLocation: 'middle',
+            nameGap: 50
+          },
+          series: priorityData
+        };
+      }
+    };
+
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+        <ReactECharts 
+          option={getChartOption()} 
+          style={{ height: '500px', width: '100%' }}
+          opts={{ renderer: 'canvas' }}
+        />
+        
+        {/* Summary Statistics */}
+        <div className="mt-6 grid grid-cols-4 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-900">Total Records</h4>
+            <p className="text-2xl font-bold text-blue-600">{data.length}</p>
+          </div>
+          
+          {tabId === 'unmappedUserStories' || tabId === 'unmappedTestCases' ? (
+            <>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-green-900">Active</h4>
+                <p className="text-2xl font-bold text-green-600">
+                  {data.filter(item => item.status === 'Active').length}
+                </p>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-red-900">Inactive</h4>
+                <p className="text-2xl font-bold text-red-600">
+                  {data.filter(item => item.status === 'Inactive').length}
+                </p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-amber-900">Pending</h4>
+                <p className="text-2xl font-bold text-amber-600">
+                  {data.filter(item => item.status === 'Pending').length}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-red-900">High Priority</h4>
+                <p className="text-2xl font-bold text-red-600">
+                  {data.filter(item => item.priority === 'High').length}
+                </p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-amber-900">Medium Priority</h4>
+                <p className="text-2xl font-bold text-amber-600">
+                  {data.filter(item => item.priority === 'Medium').length}
+                </p>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-green-900">Low Priority</h4>
+                <p className="text-2xl font-bold text-green-600">
+                  {data.filter(item => item.priority === 'Low').length}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
@@ -1107,413 +1386,423 @@ export default function Analytics() {
           <button
             onClick={() => {
               setIsPanelCollapsed(false);
-              setIsOperationalExpanded(true);
-            }}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            title="Operational"
-          >
-            <span className="text-2xl">🗂</span>
-          </button>
-          
-          {selectedTool && (
-            <div className="mt-auto mb-4">
-              {operationalTools.map((tool) => (
-                selectedTool === tool.id && (
-                  <span
-                    key={tool.id}
-                    className="text-3xl"
-                    title={tool.name}
-                  >
-                    {tool.icon}
-                  </span>
-                )
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+             setIsOperationalExpanded(true);
+           }}
+           className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
+           title="Operational"
+         >
+           <span className="text-2xl">🗂</span>
+         </button>
+         
+         {selectedTool && (
+           <div className="mt-auto mb-4">
+             {operationalTools.map((tool) => (
+               selectedTool === tool.id && (
+                 <span
+                   key={tool.id}
+                   className="text-3xl"
+                   title={tool.name}
+                 >
+                   {tool.icon}
+                 </span>
+               )
+             ))}
+           </div>
+         )}
+       </div>
+     )}
+   </div>
+ );
 
-  const WelcomeScreen = () => (
-    <div className="flex-1 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
-      <div className="max-w-2xl mx-auto text-center px-8">
-        <div className="mb-8 relative">
-          <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse">
-            <span className="text-6xl">📊</span>
-          </div>
-          <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-400 rounded-full animate-ping"></div>
-        </div>
-        
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-4">
-          Welcome to ASTRA Analytics Suite
-        </h1>
-        
-        <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-          Get started by selecting an analytics tool from the <span className="font-semibold text-green-600">Operational</span> section 
-          in the left panel. Choose between JIRA, Zephyr, or Gap Analysis to begin generating comprehensive reports.
-        </p>
-        
-        <div className="grid grid-cols-3 gap-6 mt-12">
-          {operationalTools.map((tool) => (
-            <div
-              key={tool.id}
-              className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-105"
-              onClick={() => {
-                handleToolSelect(tool.id);
-                if (isPanelCollapsed) {
-                  setIsPanelCollapsed(false);
-                }
-                setIsOperationalExpanded(true);
-              }}
-            >
-              <div className={`w-16 h-16 mx-auto mb-4 flex items-center justify-center`}>
-                <span className="text-5xl">{tool.icon}</span>
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">{tool.name}</h3>
-              <p className="text-sm text-gray-600">{tool.description}</p>
-            </div>
-          ))}
-        </div>
-        
-        <div className="mt-12 text-sm text-gray-500">
-          <p>📍 Click on any tool above or use the left panel to navigate</p>
-        </div>
-      </div>
-    </div>
-  );
+ const WelcomeScreen = () => (
+   <div className="flex-1 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+     <div className="max-w-2xl mx-auto text-center px-8">
+       <div className="mb-8 relative">
+         <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse">
+           <span className="text-6xl">📊</span>
+         </div>
+         <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-400 rounded-full animate-ping"></div>
+       </div>
+       
+       <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-4">
+         Welcome to ASTRA Analytics Suite
+       </h1>
+       
+       <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+         Get started by selecting an analytics tool from the <span className="font-semibold text-green-600">Operational</span> section 
+         in the left panel. Choose between JIRA, Zephyr, or Gap Analysis to begin generating comprehensive reports.
+       </p>
+       
+       <div className="grid grid-cols-3 gap-6 mt-12">
+         {operationalTools.map((tool) => (
+           <div
+             key={tool.id}
+             className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-105"
+             onClick={() => {
+               handleToolSelect(tool.id);
+               if (isPanelCollapsed) {
+                 setIsPanelCollapsed(false);
+               }
+               setIsOperationalExpanded(true);
+             }}
+           >
+             <div className={`w-16 h-16 mx-auto mb-4 flex items-center justify-center`}>
+               <span className="text-5xl">{tool.icon}</span>
+             </div>
+             <h3 className="font-semibold text-gray-800 mb-2">{tool.name}</h3>
+             <p className="text-sm text-gray-600">{tool.description}</p>
+           </div>
+         ))}
+       </div>
+       
+       <div className="mt-12 text-sm text-gray-500">
+         <p>📍 Click on any tool above or use the left panel to navigate</p>
+       </div>
+     </div>
+   </div>
+ );
 
-  return (
-    <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
-      <header className={`flex justify-between items-center px-4 py-2 h-20 shadow-md ${darkMode ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}>
-        <div className="flex items-center ml-5">
-          <div className="flex items-center">
-            <img 
-              src="/citi-logo.png" 
-              alt="Citi" 
-              className="h-8 w-auto" 
-            />
-            <span className="ml-5 text-[26px] font-medium text-black font-roboto flex items-center mt-[10px]">
-              ASTRA
-            </span>
-          </div>
-        </div>
+ return (
+   <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
+     <header className={`flex justify-between items-center px-4 py-2 h-20 shadow-md ${darkMode ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}>
+       <div className="flex items-center ml-5">
+         <div className="flex items-center">
+           <img 
+             src="/citi-logo.png" 
+             alt="Citi" 
+             className="h-8 w-auto" 
+           />
+           <span className="ml-5 text-[26px] font-medium text-black font-roboto flex items-center mt-[10px]">
+             ASTRA
+           </span>
+         </div>
+       </div>
 
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <button 
-              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
-              onClick={handleNotificationClick}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/>
-              </svg>
-              {unreadNotifications > 0 && (
-                <span className="absolute top-0 right-0 h-5 w-5 bg-[#d62d20] rounded-full text-white text-xs flex items-center justify-center">
-                  {unreadNotifications}
-                </span>
-              )}
-            </button>
-          </div>
+       <div className="flex items-center space-x-3">
+         <div className="relative">
+           <button 
+             className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+             onClick={handleNotificationClick}
+           >
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+               <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/>
+             </svg>
+             {unreadNotifications > 0 && (
+               <span className="absolute top-0 right-0 h-5 w-5 bg-[#d62d20] rounded-full text-white text-xs flex items-center justify-center">
+                 {unreadNotifications}
+               </span>
+             )}
+           </button>
+         </div>
 
-          <button
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors border border-gray-200"
-          >
-            <div className="w-8 h-8 rounded-full bg-teal-400 flex items-center justify-center text-white font-medium">
-              A
-            </div>
-          </button>
-        </div>
-      </header>
+         <button
+           onClick={() => setShowProfileMenu(!showProfileMenu)}
+           className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors border border-gray-200"
+         >
+           <div className="w-8 h-8 rounded-full bg-teal-400 flex items-center justify-center text-white font-medium">
+             A
+           </div>
+         </button>
+       </div>
+     </header>
 
-      <div className="bg-[#f0f5f7] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.07)] relative z-10 border-b border-gray-200">
-        <div className="pl-4">
-          <nav className="flex h-10">
-            <Link href="/">
-              <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
-                Home
-              </div>
-            </Link>
-            <Link href="/studio">
-              <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/studio" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
-                Studio
-              </div>
-            </Link>
-            <Link href="/analytics">
-              <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/analytics" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
-                Analytics
-              </div>
-            </Link>
-            <Link href="#">
-              <div className="px-5 py-2 text-[15px] font-medium text-gray-400 border-b-2 border-transparent cursor-not-allowed">
-                Documentation
-              </div>
-            </Link>
-          </nav>
-        </div>
-      </div>
+     <div className="bg-[#f0f5f7] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.07)] relative z-10 border-b border-gray-200">
+       <div className="pl-4">
+         <nav className="flex h-10">
+           <Link href="/">
+             <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
+               Home
+             </div>
+           </Link>
+           <Link href="/studio">
+             <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/studio" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
+               Studio
+             </div>
+           </Link>
+           <Link href="/analytics">
+             <div className={`px-5 py-2 text-[15px] font-medium ${pathname === "/analytics" ? "text-[#0057e7] border-b-2 border-[#0057e7]" : "text-[#0f2d91] hover:text-[#0057e7] border-b-2 border-transparent"} transition-colors cursor-pointer`}>
+               Analytics
+             </div>
+           </Link>
+           <Link href="#">
+             <div className="px-5 py-2 text-[15px] font-medium text-gray-400 border-b-2 border-transparent cursor-not-allowed">
+               Documentation
+             </div>
+           </Link>
+         </nav>
+       </div>
+     </div>
 
-      <NotificationsDropdown />
+     <NotificationsDropdown />
 
-      {showProfileMenu && (
-        <div 
-          className="fixed right-4 top-12 w-48 bg-white shadow-xl rounded-md z-50 border border-gray-200 overflow-hidden"
-          style={{ position: 'absolute', top: '60px', right: '10px' }}
-        >
-          <div className="py-1">
-            <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
-              <span>👤</span> Guest
-            </button>
-            <Link href="/settings">
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
-                <span>⚙️</span> Settings
-              </button>
-            </Link>
-            <button
-              onClick={() => {
-                setDarkMode(!darkMode);
-                setShowProfileMenu(false);
-              }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
-            >
-              <span>{darkMode ? "☀️" : "🌙"}</span> {darkMode ? "Light Mode" : "Dark Mode"}
-            </button>
-            <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
-              <span>❓</span> Help & Support
-            </button>
-            <div className="border-t border-gray-200 my-1"></div>
-            <button className="w-full text-left px-4 py-2 text-sm text-[#d62d20] hover:bg-[#d62d20]/10 flex items-center gap-2 transition-colors">
-              <span>🚪</span> Sign out
-            </button>
-          </div>
-        </div>
-      )}
+     {showProfileMenu && (
+       <div 
+         className="fixed right-4 top-12 w-48 bg-white shadow-xl rounded-md z-50 border border-gray-200 overflow-hidden"
+         style={{ position: 'absolute', top: '60px', right: '10px' }}
+       >
+         <div className="py-1">
+           <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+             <span>👤</span> Guest
+           </button>
+           <Link href="/settings">
+             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+               <span>⚙️</span> Settings
+             </button>
+           </Link>
+           <button
+             onClick={() => {
+               setDarkMode(!darkMode);
+               setShowProfileMenu(false);
+             }}
+             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
+           >
+             <span>{darkMode ? "☀️" : "🌙"}</span> {darkMode ? "Light Mode" : "Dark Mode"}
+           </button>
+           <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+             <span>❓</span> Help & Support
+           </button>
+           <div className="border-t border-gray-200 my-1"></div>
+           <button className="w-full text-left px-4 py-2 text-sm text-[#d62d20] hover:bg-[#d62d20]/10 flex items-center gap-2 transition-colors">
+             <span>🚪</span> Sign out
+           </button>
+         </div>
+       </div>
+     )}
 
-      {showProfileMenu && (
-        <div 
-          className="fixed inset-0 bg-transparent z-40"
-          onClick={() => setShowProfileMenu(false)}
-        />
-      )}
+     {showProfileMenu && (
+       <div 
+         className="fixed inset-0 bg-transparent z-40"
+         onClick={() => setShowProfileMenu(false)}
+       />
+     )}
 
-      <div className="flex flex-1 overflow-hidden">
-        <BeautifulPanel />
+     <div className="flex flex-1 overflow-hidden">
+       <BeautifulPanel />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {selectedTool ? (
-            <>
-              <div className="bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    {operationalTools.map((tool) => (
-                      selectedTool === tool.id && (
-                        <div key={tool.id} className="flex items-center space-x-3 animate-fadeIn">
-                          <span className="text-3xl">{tool.icon}</span>
-                          <div>
-                            <h2 className="text-xl font-semibold text-gray-900">{tool.name}</h2>
-                            <p className="text-sm text-gray-500">{tool.description}</p>
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedTool(null);
-                      setProjects([]);
-                      setReleases([]);
-                      setSelectedProject(null);
-                      setSelectedRelease(null);
-                      setReportGenerated(false);
-                      setReportViewed(false);
-                    }}
-                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    Change Tool →
-                  </button>
-                </div>
+       <div className="flex-1 flex flex-col overflow-hidden">
+         {selectedTool ? (
+           <>
+             <div className="bg-white border-b border-gray-200 px-6 py-4">
+               <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center space-x-3">
+                   {operationalTools.map((tool) => (
+                     selectedTool === tool.id && (
+                       <div key={tool.id} className="flex items-center space-x-3 animate-fadeIn">
+                         <span className="text-3xl">{tool.icon}</span>
+                         <div>
+                           <h2 className="text-xl font-semibold text-gray-900">{tool.name}</h2>
+                           <p className="text-sm text-gray-500">{tool.description}</p>
+                         </div>
+                       </div>
+                     )
+                   ))}
+                 </div>
+                 <button
+                   onClick={() => {
+                     setSelectedTool(null);
+                     setProjects([]);
+                     setReleases([]);
+                     setSelectedProject(null);
+                     setSelectedRelease(null);
+                     setReportGenerated(false);
+                     setReportViewed(false);
+                   }}
+                   className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                 >
+                   Change Tool →
+                 </button>
+               </div>
 
-                <div className="flex items-end gap-6">
-                  <div className="flex-1 max-w-xs">
-                    <CustomDropdown
-                      label="Select Project"
-                      options={projects}
-                      selected={selectedProject}
-                      onSelect={handleProjectSelect}
-                      disabled={false}
-                      loading={loadingProjects}
-                      placeholder="Choose a project..."
-                    />
-                  </div>
+               <div className="flex items-end gap-6">
+                 <div className="flex-1 max-w-xs">
+                   <CustomDropdown
+                     label="Select Project"
+                     options={projects}
+                     selected={selectedProject}
+                     onSelect={handleProjectSelect}
+                     disabled={false}
+                     loading={loadingProjects}
+                     placeholder="Choose a project..."
+                   />
+                 </div>
 
-                  <div className="flex-1 max-w-xs">
-                    <CustomDropdown
-                      label="Select Release"
-                      options={releases}
-                      selected={selectedRelease}
-                      onSelect={handleReleaseSelect}
-                      disabled={!isProjectSelected}
-                      loading={loadingReleases}
-                      placeholder={isProjectSelected ? "Choose a release..." : "Select a project first"}
-                    />
-                  </div>
+                 <div className="flex-1 max-w-xs">
+                   <CustomDropdown
+                     label="Select Release"
+                     options={releases}
+                     selected={selectedRelease}
+                     onSelect={handleReleaseSelect}
+                     disabled={!isProjectSelected}
+                     loading={loadingReleases}
+                     placeholder={isProjectSelected ? "Choose a release..." : "Select a project first"}
+                   />
+                 </div>
 
-                  <div className="flex flex-col">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-                      Action
-                    </label>
-                    <button
-                      onClick={handleGenerateReport}
-                      disabled={!isGenerateReportEnabled}
-                      className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                        isGenerateReportEnabled
-                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {loadingGenerateReport ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                          Generating...
-                        </div>
-                      ) : (
-                        'Generate Report'
-                      )}
-                    </button>
-                  </div>
+                 <div className="flex flex-col">
+                   <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                     Action
+                   </label>
+                   <button
+                     onClick={handleGenerateReport}
+                     disabled={!isGenerateReportEnabled}
+                     className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                       isGenerateReportEnabled
+                         ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                     }`}
+                   >
+                     {loadingGenerateReport ? (
+                       <div className="flex items-center">
+                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                         Generating...
+                       </div>
+                     ) : (
+                       'Generate Report'
+                     )}
+                   </button>
+                 </div>
 
-                  <div className="flex flex-col">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-                      View
-                    </label>
-                    <button
-                      onClick={handleViewReport}
-                      disabled={!isViewReportEnabled}
-                      className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                        isViewReportEnabled
-                          ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {loadingViewReport ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                          Loading...
-                        </div>
-                      ) : (
-                        'View Report'
-                      )}
-                    </button>
-                  </div>
+                 <div className="flex flex-col">
+                   <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                     View
+                   </label>
+                   <button
+                     onClick={handleViewReport}
+                     disabled={!isViewReportEnabled}
+                     className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                       isViewReportEnabled
+                         ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                     }`}
+                   >
+                     {loadingViewReport ? (
+                       <div className="flex items-center">
+                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                         Loading...
+                       </div>
+                     ) : (
+                       'View Report'
+                     )}
+                   </button>
+                 </div>
 
-                  {reportGenerated && reportData.lastRefresh && (
-                    <div className="flex flex-col justify-end">
-                      <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
-                        <span className="mr-1">🕒</span>
-                        Generated: {formatDateTime(reportData.lastRefresh)}
-                      </div>
-                    </div>
-                  )}
+                 {reportGenerated && reportData.lastRefresh && (
+                   <div className="flex flex-col justify-end">
+                     <div className="text-xs text-gray-500 bg-green-50 border border-green-200 rounded px-3 py-2 whitespace-nowrap">
+                       <span className="mr-1">🕒</span>
+                       Generated: {formatDateTime(reportData.lastRefresh)}
+                     </div>
+                   </div>
+                 )}
 
-                  <div className="flex-1"></div>
+                 <div className="flex-1"></div>
 
-                  <ExportDropdown />
-                </div>
+                 <ExportDropdown />
+               </div>
 
-                {error && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
-                    <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-red-700 font-medium">{error}</span>
-                  </div>
-                )}
-              </div>
+               {error && (
+                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+                   <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                   </svg>
+                   <span className="text-red-700 font-medium">{error}</span>
+                 </div>
+               )}
+             </div>
 
-              {reportViewed && (
-                <div className="flex-1 bg-gray-50 overflow-hidden flex flex-col">
-                  <div className="bg-white border-b border-gray-200">
-                    <div className="px-6">
-                      <nav className="flex space-x-8 overflow-x-auto">
-                        {tabs.map((tab) => (
-                          <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                              activeTab === tab.id
-                                ? 'border-blue-500 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                          >
-                            <span className="mr-2 text-lg">{tab.icon}</span>
-                            {tab.label}
-                            <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                              {reportData[tab.id]?.length || 0}
-                            </span>
-                          </button>
-                        ))}
-                      </nav>
-                    </div>
-                  </div>
+             {reportViewed && (
+               <div className="flex-1 bg-gray-50 overflow-hidden flex flex-col">
+                 <div className="bg-white border-b border-gray-200">
+                   <div className="px-6">
+                     <div className="flex items-center justify-between">
+                       <nav className="flex space-x-8 overflow-x-auto">
+                         {tabs.map((tab) => (
+                           <button
+                             key={tab.id}
+                             onClick={() => setActiveTab(tab.id)}
+                             className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                               activeTab === tab.id
+                                 ? 'border-blue-500 text-blue-600'
+                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                             }`}
+                           >
+                             <span className="mr-2 text-lg">{tab.icon}</span>
+                             {tab.label}
+                             <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                               {reportData[tab.id]?.length || 0}
+                             </span>
+                           </button>
+                         ))}
+                       </nav>
+                       <ViewModeToggle />
+                     </div>
+                   </div>
+                 </div>
 
-                  <div className="p-6">
-                    <DataTable 
-                      data={reportData[activeTab]} 
-                      tabId={activeTab}
-                    />
-                  </div>
-                </div>
-              )}
+                 <div className="p-6">
+                   {viewMode === 'table' ? (
+                     <DataTable 
+                       data={reportData[activeTab]} 
+                       tabId={activeTab}
+                     />
+                   ) : (
+                     <ChartView
+                       data={reportData[activeTab]}
+                       tabId={activeTab}
+                     />
+                   )}
+                 </div>
+               </div>
+             )}
 
-              {!reportGenerated && (
-                <div className="flex-1 bg-gray-50 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-gray-400 text-8xl mb-6">📊</div>
-                    <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
-                    <p className="text-lg text-gray-600 max-w-md mx-auto">
-                      {!isProjectSelected 
-                        ? "Select a project to begin generating your analytics report."
-                        : !isReleaseSelected
-                          ? "Select a release to continue with report generation."
-                          : "Click 'Generate Report' to create your analytics report."
-                      }
-                    </p>
-                  </div>
-                </div>
-              )}
+             {!reportGenerated && (
+               <div className="flex-1 bg-gray-50 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="text-gray-400 text-8xl mb-6">📊</div>
+                   <h3 className="text-2xl font-semibold text-gray-900 mb-4">Ready to Generate Analytics</h3>
+                   <p className="text-lg text-gray-600 max-w-md mx-auto">
+                     {!isProjectSelected 
+                       ? "Select a project to begin generating your analytics report."
+                       : !isReleaseSelected
+                         ? "Select a release to continue with report generation."
+                         : "Click 'Generate Report' to create your analytics report."
+                     }
+                   </p>
+                 </div>
+               </div>
+             )}
 
-              {reportGenerated && !reportViewed && (
-                <div className="flex-1 bg-gray-50 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-green-500 text-8xl mb-6">✅</div>
-                    <h3 className="text-2xl font-semibold text-gray-900 mb-4">Report Generated Successfully</h3>
-                    <p className="text-lg text-gray-600 max-w-md mx-auto mb-6">
-                      Your analytics report has been generated for {selectedProject?.name} - {selectedRelease?.name}.
-                    </p>
-                    <p className="text-base text-gray-500">
-                      Click "View Report" to load and display the detailed analytics data.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <WelcomeScreen />
-          )}
-        </div>
-      </div>
+             {reportGenerated && !reportViewed && (
+               <div className="flex-1 bg-gray-50 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="text-green-500 text-8xl mb-6">✅</div>
+                   <h3 className="text-2xl font-semibold text-gray-900 mb-4">Report Generated Successfully</h3>
+                   <p className="text-lg text-gray-600 max-w-md mx-auto mb-6">
+                     Your analytics report has been generated for {selectedProject?.name} - {selectedRelease?.name}.
+                   </p>
+                   <p className="text-base text-gray-500">
+                     Click "View Report" to load and display the detailed analytics data.
+                   </p>
+                 </div>
+               </div>
+             )}
+           </>
+         ) : (
+           <WelcomeScreen />
+         )}
+       </div>
+     </div>
 
-      <footer className="w-full bg-[#222222] text-white text-center p-2 flex justify-between items-center border-t border-gray-800">
-        <div className="text-xs text-gray-400 ml-4">v0.9.0</div>
-        <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
-          <span className="mr-2 text-sm font-medium text-gray-300">Powered by</span>
-          <a href="https://kayatech.com/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
-            <img src="/converted_image.png" alt="Kaya Logo" className="h-3" />
-          </a>
-        </div>
-        <div className="text-xs text-gray-400 mr-4">© 2025 KAYA Global Inc.</div>
-      </footer>
-    </div>
-  );
+     <footer className="w-full bg-[#222222] text-white text-center p-2 flex justify-between items-center border-t border-gray-800">
+       <div className="text-xs text-gray-400 ml-4">v0.9.0</div>
+       <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
+         <span className="mr-2 text-sm font-medium text-gray-300">Powered by</span>
+         <a href="https://kayatech.com/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+           <img src="/converted_image.png" alt="Kaya Logo" className="h-3" />
+         </a>
+       </div>
+       <div className="text-xs text-gray-400 mr-4">© 2025 KAYA Global Inc.</div>
+     </footer>
+   </div>
+ );
 }
