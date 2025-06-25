@@ -91,8 +91,8 @@ export default function Analytics() {
       icon: '📈',
       color: 'from-purple-500 to-purple-600',
       bgHover: 'hover:from-purple-50/50',
-      // Your actual Tableau dashboard URL
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
+      // Corrected URL with proper server name
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
     },
     {
       id: 'TABLEAU_PERFORMANCE',
@@ -102,7 +102,7 @@ export default function Analytics() {
       color: 'from-blue-500 to-blue-600',
       bgHover: 'hover:from-blue-50/50',
       // Add your other dashboard URLs here
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
     },
     {
       id: 'TABLEAU_QUALITY',
@@ -112,7 +112,7 @@ export default function Analytics() {
       color: 'from-green-500 to-green-600',
       bgHover: 'hover:from-green-50/50',
       // Add your other dashboard URLs here
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
     }
   ];
 
@@ -1644,47 +1644,40 @@ export default function Analytics() {
   const TableauDashboard = () => {
     const tableauRef = useRef(null);
     const scriptRef = useRef(null);
+    const [authError, setAuthError] = useState(false);
 
     useEffect(() => {
-      // Load Tableau Embedding API v3
-      if (!document.querySelector('script[src*="tableau.embedding.3"]')) {
-        const script = document.createElement('script');
-        script.type = 'module';
-        script.src = 'https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js';
-        script.async = true;
-        scriptRef.current = script;
-        
-        script.onload = () => {
-          console.log('Tableau Embedding API loaded');
+      // First, check if we can access Tableau at all
+      const checkTableauAccess = async () => {
+        try {
+          // Try to load the Tableau API script
+          const testScript = document.createElement('script');
+          testScript.src = 'https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js';
+          
+          testScript.onerror = () => {
+            console.error('Cannot load Tableau API - likely authentication issue');
+            setAuthError(true);
+            setIsTableauLoading(false);
+          };
+          
+          testScript.onload = () => {
+            console.log('Tableau API accessible');
+            setAuthError(false);
+            loadTableauDashboard();
+          };
+          
+          document.head.appendChild(testScript);
+          scriptRef.current = testScript;
+        } catch (error) {
+          console.error('Error checking Tableau access:', error);
+          setAuthError(true);
           setIsTableauLoading(false);
-        };
-        
-        script.onerror = () => {
-          setTableauError('Failed to load Tableau Embedding API');
-          setIsTableauLoading(false);
-        };
-        
-        document.head.appendChild(script);
-      } else {
-        // Script already loaded
-        setIsTableauLoading(false);
-      }
-
-      // Cleanup function
-      return () => {
-        // Remove the tableau-viz element if it exists
-        if (tableauRef.current) {
-          const vizElement = tableauRef.current.querySelector('tableau-viz');
-          if (vizElement) {
-            vizElement.remove();
-          }
         }
       };
-    }, [selectedExecutiveTool]);
 
-    // Create the Tableau viz element when not loading
-    useEffect(() => {
-      if (!isTableauLoading && tableauRef.current && selectedExecutiveTool) {
+      const loadTableauDashboard = () => {
+        if (!tableauRef.current || !selectedExecutiveTool) return;
+
         // Remove any existing tableau-viz element
         const existingViz = tableauRef.current.querySelector('tableau-viz');
         if (existingViz) {
@@ -1698,11 +1691,11 @@ export default function Analytics() {
         tableauViz.setAttribute('width', '100%');
         tableauViz.setAttribute('height', '100%');
         tableauViz.setAttribute('toolbar', 'bottom');
-        tableauViz.setAttribute('hide-tabs', 'false');
         
         // Add event listeners
         tableauViz.addEventListener('firstinteractive', () => {
           console.log('Tableau dashboard interactive');
+          setIsTableauLoading(false);
           const newNotification = {
             id: Date.now(),
             title: "Dashboard Loaded",
@@ -1716,13 +1709,45 @@ export default function Analytics() {
 
         tableauViz.addEventListener('error', (e) => {
           console.error('Tableau viz error:', e);
-          setTableauError('Failed to load the Tableau dashboard. Please check your permissions and try again.');
+          setTableauError('Failed to load dashboard. This may be due to permissions or authentication.');
+          setIsTableauLoading(false);
         });
 
         // Append to container
         tableauRef.current.appendChild(tableauViz);
+      };
+
+      if (selectedExecutiveTool) {
+        setIsTableauLoading(true);
+        checkTableauAccess();
       }
-    }, [isTableauLoading, selectedExecutiveTool]);
+
+      // Cleanup
+      return () => {
+        if (scriptRef.current && scriptRef.current.parentNode) {
+          scriptRef.current.parentNode.removeChild(scriptRef.current);
+        }
+        if (tableauRef.current) {
+          const vizElement = tableauRef.current.querySelector('tableau-viz');
+          if (vizElement) {
+            vizElement.remove();
+          }
+        }
+      };
+    }, [selectedExecutiveTool]);
+
+    const openInNewTab = () => {
+      window.open(selectedExecutiveTool.dashboardUrl, '_blank');
+      const newNotification = {
+        id: Date.now(),
+        title: "Dashboard Opened",
+        message: `${selectedExecutiveTool.name} opened in a new tab.`,
+        date: new Date().toLocaleString(),
+        read: false,
+        type: "info"
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+    };
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1736,16 +1761,19 @@ export default function Analytics() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-500">
-                <span className="mr-1">🔗</span>
-                Tableau Dashboard
-              </div>
+              <button
+                onClick={openInNewTab}
+                className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+              >
+                Open in New Tab ↗
+              </button>
               <button
                 onClick={() => {
                   setSelectedExecutiveTool(null);
                   setSelectedSection(null);
                   setTableauUrl('');
                   setTableauError(null);
+                  setAuthError(false);
                 }}
                 className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
               >
@@ -1766,34 +1794,67 @@ export default function Analytics() {
               </div>
             )}
             
-            {tableauError && (
+            {(tableauError || authError) && (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Dashboard</h3>
-                  <p className="text-gray-500 mb-4">{tableauError}</p>
-                  <button
-                    onClick={() => {
-                      setTableauError(null);
-                      setIsTableauLoading(true);
-                      // Reload the component
-                      if (tableauRef.current) {
-                        const vizElement = tableauRef.current.querySelector('tableau-viz');
-                        if (vizElement) {
-                          vizElement.remove();
-                        }
-                      }
-                      setIsTableauLoading(false);
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Retry
-                  </button>
+                <div className="text-center max-w-md">
+                  <div className="text-6xl mb-4">{authError ? '🔐' : '⚠️'}</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    {authError ? 'Authentication Required' : 'Failed to Load Dashboard'}
+                  </h3>
+                  <p className="text-gray-500 mb-6">
+                    {authError 
+                      ? 'You need to authenticate with Tableau Server to view embedded dashboards.'
+                      : tableauError || 'Unable to load the dashboard.'}
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <button
+                      onClick={openInNewTab}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Open Dashboard in New Tab
+                    </button>
+                    
+                    {!authError && (
+                      <button
+                        onClick={() => {
+                          setTableauError(null);
+                          setIsTableauLoading(true);
+                          setAuthError(false);
+                          // Retry loading
+                          const existingScript = document.querySelector('script[src*="tableau.embedding"]');
+                          if (existingScript) {
+                            existingScript.remove();
+                          }
+                          if (tableauRef.current) {
+                            const vizElement = tableauRef.current.querySelector('tableau-viz');
+                            if (vizElement) {
+                              vizElement.remove();
+                            }
+                          }
+                        }}
+                        className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Retry Embedding
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-left">
+                    <p className="text-sm text-amber-800">
+                      <strong>Tip:</strong> If you see this message frequently:
+                    </p>
+                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
+                      <li>Make sure you're logged into Tableau Server</li>
+                      <li>Check that you have permissions for this dashboard</li>
+                      <li>Try opening the dashboard in a new tab first</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             )}
 
-            {!tableauError && (
+            {!tableauError && !authError && (
               <div 
                 ref={tableauRef} 
                 className="w-full h-full"
