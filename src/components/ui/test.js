@@ -1,312 +1,360 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
-import Script from 'next/script';
+import { useState, useEffect } from 'react';
 
-export default function TableauEmbedTest() {
+export default function TableauEmbedFixed() {
   const [tableauUrl, setTableauUrl] = useState('https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary');
-  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [status, setStatus] = useState({ message: '', type: '' });
-  const vizContainerRef = useRef(null);
+  const [authMethod, setAuthMethod] = useState('trusted'); // 'trusted' or 'public'
 
-  // Load saved URL on component mount
-  useEffect(() => {
-    const savedUrl = localStorage.getItem('tableauTestUrl');
-    if (savedUrl) {
-      setTableauUrl(savedUrl);
+  // Test Methods to try different approaches
+  const testMethods = [
+    {
+      name: 'Method 1: Direct Embed',
+      description: 'Using tableau-viz web component directly',
+      action: 'embed'
+    },
+    {
+      name: 'Method 2: JavaScript API v2',
+      description: 'Using older Tableau JavaScript API',
+      action: 'jsapi'
+    },
+    {
+      name: 'Method 3: Trusted Ticket',
+      description: 'Using trusted authentication',
+      action: 'trusted'
+    },
+    {
+      name: 'Method 4: Simple iFrame',
+      description: 'Basic iframe with parameters',
+      action: 'iframe'
     }
-  }, []);
+  ];
 
-  const loadDashboard = () => {
-    if (!tableauUrl.trim()) {
-      setStatus({ message: 'Please enter a Tableau URL', type: 'error' });
-      return;
-    }
-
-    if (!isScriptLoaded) {
-      setStatus({ message: 'Tableau API is still loading, please wait...', type: 'error' });
-      return;
-    }
-
-    // Save URL to localStorage
-    localStorage.setItem('tableauTestUrl', tableauUrl);
-
-    // Show loading state
-    setStatus({ message: 'Loading dashboard...', type: 'loading' });
+  const loadDashboardWithMethod = (method) => {
     setShowDashboard(true);
+    setStatus({ message: `Trying ${method}...`, type: 'loading' });
 
-    // Clear any existing viz
-    if (vizContainerRef.current) {
-      vizContainerRef.current.innerHTML = '';
+    const container = document.getElementById('vizContainer');
+    if (!container) return;
+
+    // Clear previous content
+    container.innerHTML = '';
+
+    switch(method) {
+      case 'embed':
+        // Method 1: Direct tableau-viz embed
+        container.innerHTML = `
+          <script type='module' src='https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js'></script>
+          <tableau-viz 
+            id='tableauViz' 
+            src='${tableauUrl}'
+            width='100%' 
+            height='800'
+            hide-tabs='true'
+            toolbar='bottom'
+            device='desktop'>
+          </tableau-viz>
+        `;
+        break;
+
+      case 'jsapi':
+        // Method 2: JavaScript API v2
+        container.innerHTML = `
+          <script type='text/javascript' src='https://insights.citigroup.net/javascripts/api/viz_v1.js'></script>
+          <div id='vizContainer2' style='width:100%; height:800px;'></div>
+          <script type='text/javascript'>
+            function initViz() {
+              var containerDiv = document.getElementById("vizContainer2");
+              var url = "${tableauUrl}";
+              var options = {
+                hideTabs: true,
+                hideToolbar: false,
+                width: "100%",
+                height: "800px",
+                onFirstInteractive: function () {
+                  console.log("Viz loaded successfully");
+                }
+              };
+              try {
+                var viz = new tableau.Viz(containerDiv, url, options);
+              } catch(e) {
+                console.error("Error loading viz:", e);
+              }
+            }
+            if (typeof tableau !== 'undefined') {
+              initViz();
+            } else {
+              window.addEventListener('load', initViz);
+            }
+          </script>
+        `;
+        break;
+
+      case 'trusted':
+        // Method 3: Trusted ticket approach
+        const trustedUrl = `${tableauUrl}?:embed=yes&:comments=no&:toolbar=yes&:refresh=yes`;
+        container.innerHTML = `
+          <iframe 
+            src="${trustedUrl}"
+            width="100%" 
+            height="800"
+            frameborder="0"
+            allowfullscreen="true"
+            webkitallowfullscreen="true"
+            mozallowfullscreen="true">
+          </iframe>
+        `;
+        break;
+
+      case 'iframe':
+        // Method 4: Simple iframe with all parameters
+        const iframeUrl = tableauUrl + 
+          '?:embed=y' +
+          '&:showVizHome=no' +
+          '&:host_url=https%3A%2F%2Finsights.citigroup.net%2F' +
+          '&:embed_code_version=3' +
+          '&:tabs=no' +
+          '&:toolbar=yes' +
+          '&:animate_transition=yes' +
+          '&:display_static_image=yes' +
+          '&:display_spinner=yes' +
+          '&:display_overlay=yes' +
+          '&:display_count=yes' +
+          '&:language=en-US' +
+          '&:loadOrderID=0';
+          
+        container.innerHTML = `
+          <iframe 
+            src="${iframeUrl}"
+            width="100%" 
+            height="800"
+            frameborder="0"
+            scrolling="no"
+            allowfullscreen="true">
+          </iframe>
+        `;
+        break;
     }
 
-    // Create the tableau-viz element dynamically
-    const tableauViz = document.createElement('tableau-viz');
-    tableauViz.id = 'tableau-viz';
-    tableauViz.setAttribute('src', tableauUrl);
-    tableauViz.setAttribute('width', '100%');
-    tableauViz.setAttribute('height', '800');
-    tableauViz.setAttribute('toolbar', 'bottom');
-    
-    // Add event listeners
-    tableauViz.addEventListener('firstinteractive', () => {
+    // Check status after 5 seconds
+    setTimeout(() => {
       setStatus({ 
-        message: '✅ Dashboard loaded successfully!', 
-        type: 'success' 
+        message: 'If dashboard is not visible, check browser console for errors', 
+        type: 'info' 
       });
-    });
+    }, 5000);
+  };
 
-    tableauViz.addEventListener('vizloaderror', (e) => {
-      console.error('Tableau loading error:', e);
+  const openInNewTab = () => {
+    window.open(tableauUrl, '_blank');
+  };
+
+  const checkDirectAccess = async () => {
+    setStatus({ message: 'Checking direct access...', type: 'loading' });
+    
+    try {
+      const response = await fetch(tableauUrl, {
+        method: 'HEAD',
+        mode: 'no-cors'
+      });
       setStatus({ 
-        message: '❌ Error loading dashboard. Check console for details.', 
+        message: 'Request sent. Check if dashboard opens in new tab.', 
+        type: 'info' 
+      });
+      openInNewTab();
+    } catch (error) {
+      setStatus({ 
+        message: `Cannot verify access: ${error.message}`, 
         type: 'error' 
       });
-    });
-
-    // Append to container
-    if (vizContainerRef.current) {
-      vizContainerRef.current.appendChild(tableauViz);
     }
   };
 
   const clearDashboard = () => {
     setShowDashboard(false);
-    setTableauUrl('');
+    const container = document.getElementById('vizContainer');
+    if (container) {
+      container.innerHTML = '';
+    }
     setStatus({ message: '', type: '' });
-    localStorage.removeItem('tableauTestUrl');
-    
-    // Clear the viz container
-    if (vizContainerRef.current) {
-      vizContainerRef.current.innerHTML = '';
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      loadDashboard();
-    }
   };
 
   return (
-    <>
-      {/* Load Tableau Embedding API v3 */}
-      <Script
-        src="https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js"
-        strategy="afterInteractive"
-        onLoad={() => {
-          console.log('Tableau Embedding API loaded');
-          setIsScriptLoaded(true);
-          setStatus({ message: '✅ Tableau API loaded successfully', type: 'success' });
-        }}
-        onError={(e) => {
-          console.error('Failed to load Tableau API:', e);
-          setStatus({ 
-            message: '❌ Failed to load Tableau API. Check if you have access to insights.citigroup.net', 
-            type: 'error' 
-          });
-        }}
-      />
-
+    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
+      <h1>🔧 Tableau Embedding Troubleshooter</h1>
+      
+      {/* Step 1: Verify Access */}
       <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#f8f9fa',
         padding: '20px',
-        fontFamily: 'Arial, sans-serif'
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '1px solid #dee2e6'
       }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '8px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-        }}>
-          <h1 style={{
-            color: '#333',
-            textAlign: 'center',
-            marginBottom: '20px'
-          }}>
-            🎯 Tableau Embedding API v3 Test
-          </h1>
+        <h2>Step 1: Verify Direct Access</h2>
+        <p>First, let's check if you can access the dashboard directly:</p>
+        <div style={{ marginTop: '10px' }}>
+          <button
+            onClick={openInNewTab}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginRight: '10px'
+            }}
+          >
+            📂 Open Dashboard in New Tab
+          </button>
+          <button
+            onClick={checkDirectAccess}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            🔍 Check Access
+          </button>
+        </div>
+        <p style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
+          If the dashboard opens in a new tab, proceed to Step 2.
+        </p>
+      </div>
 
-          {/* API Status */}
-          <div style={{
-            backgroundColor: isScriptLoaded ? '#d4edda' : '#f8d7da',
-            border: `1px solid ${isScriptLoaded ? '#c3e6cb' : '#f5c6cb'}`,
-            padding: '10px',
-            borderRadius: '4px',
-            marginBottom: '20px',
-            textAlign: 'center'
-          }}>
-            Tableau API Status: {isScriptLoaded ? '✅ Loaded' : '⏳ Loading...'}
-          </div>
-
-          {/* Instructions */}
-          <div style={{
-            backgroundColor: '#e7f3ff',
-            border: '1px solid #b8daff',
-            padding: '15px',
-            borderRadius: '4px',
-            marginBottom: '20px'
-          }}>
-            <h3 style={{ marginTop: 0, color: '#004085' }}>📋 Instructions:</h3>
-            <ol style={{ paddingLeft: '20px', color: '#004085' }}>
-              <li>This uses Tableau Embedding API v3 (not iframe)</li>
-              <li>Make sure you're logged into insights.citigroup.net</li>
-              <li>The default URL is your TMAnalyticalEngine dashboard</li>
-              <li>Click "Load Dashboard" to test</li>
-            </ol>
-          </div>
-
-          {/* URL Input Section */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '20px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            border: '1px solid #dee2e6'
-          }}>
-            <label htmlFor="tableauUrl" style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: 'bold',
-              color: '#495057'
-            }}>
-              Tableau Dashboard URL:
-            </label>
-            <input
-              type="text"
-              id="tableauUrl"
-              value={tableauUrl}
-              onChange={(e) => setTableauUrl(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="https://insights.citigroup.net/t/GCT/views/..."
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '14px',
-                boxSizing: 'border-box',
-                fontFamily: 'monospace'
-              }}
-            />
-
-            <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+      {/* Step 2: Try Different Methods */}
+      <div style={{
+        backgroundColor: '#f8f9fa',
+        padding: '20px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '1px solid #dee2e6'
+      }}>
+        <h2>Step 2: Try Different Embedding Methods</h2>
+        <p>URL: <code style={{ backgroundColor: '#e9ecef', padding: '2px 4px' }}>{tableauUrl}</code></p>
+        
+        <div style={{ marginTop: '15px' }}>
+          {testMethods.map((method, index) => (
+            <div key={index} style={{ marginBottom: '10px' }}>
               <button
-                onClick={loadDashboard}
-                disabled={!isScriptLoaded}
+                onClick={() => loadDashboardWithMethod(method.action)}
                 style={{
                   padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: isScriptLoaded ? 'pointer' : 'not-allowed',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  backgroundColor: isScriptLoaded ? '#0066cc' : '#6c757d',
+                  backgroundColor: '#6c757d',
                   color: 'white',
-                  transition: 'all 0.3s',
-                  opacity: isScriptLoaded ? 1 : 0.6
-                }}
-              >
-                🚀 Load Dashboard
-              </button>
-              <button
-                onClick={clearDashboard}
-                style={{
-                  padding: '10px 20px',
                   border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  transition: 'all 0.3s'
+                  marginRight: '10px',
+                  minWidth: '200px'
                 }}
               >
-                🗑️ Clear
+                {method.name}
               </button>
+              <span style={{ fontSize: '14px', color: '#666' }}>
+                {method.description}
+              </span>
             </div>
-          </div>
-
-          {/* Status Message */}
-          {status.message && (
-            <div style={{
-              marginTop: '20px',
-              padding: '15px',
-              borderRadius: '4px',
-              textAlign: 'center',
-              fontWeight: 'bold',
-              ...(status.type === 'success' && {
-                backgroundColor: '#d4edda',
-                color: '#155724',
-                border: '1px solid #c3e6cb'
-              }),
-              ...(status.type === 'error' && {
-                backgroundColor: '#f8d7da',
-                color: '#721c24',
-                border: '1px solid #f5c6cb'
-              }),
-              ...(status.type === 'loading' && {
-                backgroundColor: '#d1ecf1',
-                color: '#0c5460',
-                border: '1px solid #bee5eb'
-              })
-            }}>
-              {status.message}
-            </div>
-          )}
-
-          {/* Dashboard Container */}
-          <div style={{
-            width: '100%',
-            minHeight: '600px',
-            border: showDashboard ? 'none' : '2px dashed #dee2e6',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: showDashboard ? 'white' : '#fafafa',
-            position: 'relative',
-            marginTop: '20px'
-          }}>
-            {!showDashboard ? (
-              <div style={{
-                color: '#6c757d',
-                fontSize: '18px',
-                textAlign: 'center'
-              }}>
-                Your Tableau dashboard will appear here<br />
-                ↑ Enter URL above and click "Load Dashboard"
-              </div>
-            ) : (
-              <div ref={vizContainerRef} style={{ width: '100%', height: '100%' }}>
-                {/* Tableau viz will be inserted here dynamically */}
-              </div>
-            )}
-          </div>
-
-          {/* Troubleshooting Tips */}
-          <div style={{
-            marginTop: '20px',
-            padding: '15px',
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffeaa7',
-            borderRadius: '4px'
-          }}>
-            <h4 style={{ marginTop: 0, color: '#856404' }}>🔧 Troubleshooting:</h4>
-            <ul style={{ marginBottom: 0, color: '#856404' }}>
-              <li>If you see "refused to connect", make sure you're logged into insights.citigroup.net</li>
-              <li>Check if your browser allows mixed content (if using HTTPS)</li>
-              <li>Verify you have permissions to view the dashboard</li>
-              <li>Try opening the dashboard URL directly in a new tab first</li>
-              <li>Check browser console (F12) for detailed error messages</li>
-            </ul>
-          </div>
+          ))}
         </div>
+
+        <button
+          onClick={clearDashboard}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginTop: '10px'
+          }}
+        >
+          🗑️ Clear Dashboard
+        </button>
       </div>
-    </>
+
+      {/* Status Message */}
+      {status.message && (
+        <div style={{
+          padding: '15px',
+          borderRadius: '4px',
+          marginBottom: '20px',
+          backgroundColor: 
+            status.type === 'success' ? '#d4edda' :
+            status.type === 'error' ? '#f8d7da' :
+            status.type === 'loading' ? '#d1ecf1' :
+            '#d1ecf1',
+          color:
+            status.type === 'success' ? '#155724' :
+            status.type === 'error' ? '#721c24' :
+            status.type === 'loading' ? '#0c5460' :
+            '#0c5460',
+          border: `1px solid ${
+            status.type === 'success' ? '#c3e6cb' :
+            status.type === 'error' ? '#f5c6cb' :
+            status.type === 'loading' ? '#bee5eb' :
+            '#bee5eb'
+          }`
+        }}>
+          {status.message}
+        </div>
+      )}
+
+      {/* Dashboard Container */}
+      <div 
+        id="vizContainer"
+        style={{
+          width: '100%',
+          minHeight: showDashboard ? '800px' : '200px',
+          border: '2px dashed #dee2e6',
+          borderRadius: '8px',
+          padding: showDashboard ? '0' : '20px',
+          backgroundColor: '#fafafa',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {!showDashboard && (
+          <div style={{ textAlign: 'center', color: '#6c757d' }}>
+            Dashboard will appear here after clicking a method above
+          </div>
+        )}
+      </div>
+
+      {/* Debug Info */}
+      <div style={{
+        marginTop: '20px',
+        padding: '15px',
+        backgroundColor: '#fff3cd',
+        border: '1px solid #ffeaa7',
+        borderRadius: '4px'
+      }}>
+        <h3>🐛 Debug Information</h3>
+        <p>Check browser console (F12) for errors. Common issues:</p>
+        <ul style={{ fontSize: '14px' }}>
+          <li><strong>Refused to connect:</strong> CORS policy blocking - need server configuration</li>
+          <li><strong>404 Not Found:</strong> URL might be incorrect or you lack permissions</li>
+          <li><strong>Unauthorized:</strong> Need to authenticate with Tableau Server first</li>
+          <li><strong>X-Frame-Options:</strong> Server blocking iframe embedding</li>
+        </ul>
+        
+        <h4>Possible Solutions:</h4>
+        <ol style={{ fontSize: '14px' }}>
+          <li>Ensure you're logged into insights.citigroup.net</li>
+          <li>Ask IT to whitelist localhost:3000 in Tableau Server</li>
+          <li>Use Tableau Connected Apps or Personal Access Tokens</li>
+          <li>Configure CORS settings on Tableau Server</li>
+          <li>Try using a proxy server for development</li>
+        </ol>
+      </div>
+    </div>
   );
 }
