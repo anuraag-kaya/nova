@@ -91,8 +91,8 @@ export default function Analytics() {
       icon: '📈',
       color: 'from-purple-500 to-purple-600',
       bgHover: 'hover:from-purple-50/50',
-      // Example Tableau Public URL - replace with your actual dashboard URL
-      dashboardUrl: 'https://public.tableau.com/views/RegionalSampleWorkbook/Storms'
+      // Your actual Tableau dashboard URL
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
     },
     {
       id: 'TABLEAU_PERFORMANCE',
@@ -101,8 +101,8 @@ export default function Analytics() {
       icon: '🚀',
       color: 'from-blue-500 to-blue-600',
       bgHover: 'hover:from-blue-50/50',
-      // Another example URL
-      dashboardUrl: 'https://public.tableau.com/views/RegionalSampleWorkbook/Obesity'
+      // Add your other dashboard URLs here
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
     },
     {
       id: 'TABLEAU_QUALITY',
@@ -111,7 +111,8 @@ export default function Analytics() {
       icon: '✨',
       color: 'from-green-500 to-green-600',
       bgHover: 'hover:from-green-50/50',
-      dashboardUrl: 'https://public.tableau.com/views/RegionalSampleWorkbook/College'
+      // Add your other dashboard URLs here
+      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM 17344285020630/1-NAMQEFunctionalTestSummary'
     }
   ];
 
@@ -1640,96 +1641,172 @@ export default function Analytics() {
     </div>
   );
 
-  const TableauDashboard = () => (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <span className="text-3xl">{selectedExecutiveTool.icon}</span>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">{selectedExecutiveTool.name}</h2>
-              <p className="text-sm text-gray-500">{selectedExecutiveTool.description}</p>
+  const TableauDashboard = () => {
+    const tableauRef = useRef(null);
+    const scriptRef = useRef(null);
+
+    useEffect(() => {
+      // Load Tableau Embedding API v3
+      if (!document.querySelector('script[src*="tableau.embedding.3"]')) {
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js';
+        script.async = true;
+        scriptRef.current = script;
+        
+        script.onload = () => {
+          console.log('Tableau Embedding API loaded');
+          setIsTableauLoading(false);
+        };
+        
+        script.onerror = () => {
+          setTableauError('Failed to load Tableau Embedding API');
+          setIsTableauLoading(false);
+        };
+        
+        document.head.appendChild(script);
+      } else {
+        // Script already loaded
+        setIsTableauLoading(false);
+      }
+
+      // Cleanup function
+      return () => {
+        // Remove the tableau-viz element if it exists
+        if (tableauRef.current) {
+          const vizElement = tableauRef.current.querySelector('tableau-viz');
+          if (vizElement) {
+            vizElement.remove();
+          }
+        }
+      };
+    }, [selectedExecutiveTool]);
+
+    // Create the Tableau viz element when not loading
+    useEffect(() => {
+      if (!isTableauLoading && tableauRef.current && selectedExecutiveTool) {
+        // Remove any existing tableau-viz element
+        const existingViz = tableauRef.current.querySelector('tableau-viz');
+        if (existingViz) {
+          existingViz.remove();
+        }
+
+        // Create new tableau-viz element
+        const tableauViz = document.createElement('tableau-viz');
+        tableauViz.setAttribute('id', 'tableau-viz');
+        tableauViz.setAttribute('src', selectedExecutiveTool.dashboardUrl);
+        tableauViz.setAttribute('width', '100%');
+        tableauViz.setAttribute('height', '100%');
+        tableauViz.setAttribute('toolbar', 'bottom');
+        tableauViz.setAttribute('hide-tabs', 'false');
+        
+        // Add event listeners
+        tableauViz.addEventListener('firstinteractive', () => {
+          console.log('Tableau dashboard interactive');
+          const newNotification = {
+            id: Date.now(),
+            title: "Dashboard Loaded",
+            message: `${selectedExecutiveTool.name} has been loaded successfully.`,
+            date: new Date().toLocaleString(),
+            read: false,
+            type: "success"
+          };
+          setNotifications(prev => [newNotification, ...prev]);
+        });
+
+        tableauViz.addEventListener('error', (e) => {
+          console.error('Tableau viz error:', e);
+          setTableauError('Failed to load the Tableau dashboard. Please check your permissions and try again.');
+        });
+
+        // Append to container
+        tableauRef.current.appendChild(tableauViz);
+      }
+    }, [isTableauLoading, selectedExecutiveTool]);
+
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="text-3xl">{selectedExecutiveTool.icon}</span>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">{selectedExecutiveTool.name}</h2>
+                <p className="text-sm text-gray-500">{selectedExecutiveTool.description}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-500">
+                <span className="mr-1">🔗</span>
+                Tableau Dashboard
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedExecutiveTool(null);
+                  setSelectedSection(null);
+                  setTableauUrl('');
+                  setTableauError(null);
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Change Dashboard →
+              </button>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-500">
-              <span className="mr-1">🔗</span>
-              Tableau Dashboard
-            </div>
-            <button
-              onClick={() => {
-                setSelectedExecutiveTool(null);
-                setSelectedSection(null);
-                setTableauUrl('');
-              }}
-              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Change Dashboard →
-            </button>
+        </div>
+
+        <div className="flex-1 bg-gray-50 p-6">
+          <div className="h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
+            {isTableauLoading && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Loading Tableau dashboard...</p>
+                </div>
+              </div>
+            )}
+            
+            {tableauError && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-red-500 text-6xl mb-4">⚠️</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Dashboard</h3>
+                  <p className="text-gray-500 mb-4">{tableauError}</p>
+                  <button
+                    onClick={() => {
+                      setTableauError(null);
+                      setIsTableauLoading(true);
+                      // Reload the component
+                      if (tableauRef.current) {
+                        const vizElement = tableauRef.current.querySelector('tableau-viz');
+                        if (vizElement) {
+                          vizElement.remove();
+                        }
+                      }
+                      setIsTableauLoading(false);
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!tableauError && (
+              <div 
+                ref={tableauRef} 
+                className="w-full h-full"
+                style={{ minHeight: '600px' }}
+              >
+                {/* Tableau viz will be dynamically inserted here */}
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      <div className="flex-1 bg-gray-50 p-6">
-        <div className="h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {isTableauLoading && (
-            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading Tableau dashboard...</p>
-              </div>
-            </div>
-          )}
-          
-          {tableauError && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Dashboard</h3>
-                <p className="text-gray-500 mb-4">{tableauError}</p>
-                <button
-                  onClick={() => {
-                    setTableauError(null);
-                    setIsTableauLoading(true);
-                  }}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!tableauError && tableauUrl && (
-            <iframe
-              src={tableauUrl}
-              width="100%"
-              height="100%"
-              frameBorder="0"
-              onLoad={() => {
-                setIsTableauLoading(false);
-                const newNotification = {
-                  id: Date.now(),
-                  title: "Dashboard Loaded",
-                  message: `${selectedExecutiveTool.name} has been loaded successfully.`,
-                  date: new Date().toLocaleString(),
-                  read: false,
-                  type: "success"
-                };
-                setNotifications(prev => [newNotification, ...prev]);
-              }}
-              onError={() => {
-                setIsTableauLoading(false);
-                setTableauError("Unable to load the dashboard. Please check your connection and try again.");
-              }}
-              allow="fullscreen"
-              className={isTableauLoading ? 'invisible' : 'visible'}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
