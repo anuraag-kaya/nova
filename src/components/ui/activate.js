@@ -18,19 +18,13 @@ export default function Analytics() {
   // Left panel states
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [isExecutiveExpanded, setIsExecutiveExpanded] = useState(false);
-  const [isOperationalExpanded, setIsOperationalExpanded] = useState(false);
+  const [isOperationalExpanded, setIsOperationalExpanded] = useState(true);
   
   // Tool selection states
   const [selectedTool, setSelectedTool] = useState(null);
-  const [selectedSection, setSelectedSection] = useState(null); // 'executive' or 'operational'
-  
-  // Executive dashboard states
   const [selectedExecutiveTool, setSelectedExecutiveTool] = useState(null);
-  const [tableauUrl, setTableauUrl] = useState('');
-  const [isTableauLoading, setIsTableauLoading] = useState(false);
-  const [tableauError, setTableauError] = useState(null);
   
-  // Form state (for operational tools)
+  // Form state
   const [projects, setProjects] = useState([]);
   const [releases, setReleases] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -74,47 +68,13 @@ export default function Analytics() {
     {
       id: 1,
       title: "Welcome to ASTRA Analytics",
-      message: "Select a tool from the Executive or Operational section to begin",
+      message: "Select a tool from the Operational or Executive section to begin",
       date: new Date().toLocaleString(),
       read: false,
       type: "info"
     }
   ]);
   const [unreadNotifications, setUnreadNotifications] = useState(1);
-
-  // Executive tools configuration
-  const executiveTools = [
-    {
-      id: 'TABLEAU_OVERVIEW',
-      name: 'Executive Overview',
-      description: 'High-level business metrics',
-      icon: '📈',
-      color: 'from-purple-500 to-purple-600',
-      bgHover: 'hover:from-purple-50/50',
-      // Corrected URL with proper server name
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
-    },
-    {
-      id: 'TABLEAU_PERFORMANCE',
-      name: 'Performance Dashboard',
-      description: 'Team performance analytics',
-      icon: '🚀',
-      color: 'from-blue-500 to-blue-600',
-      bgHover: 'hover:from-blue-50/50',
-      // Add your other dashboard URLs here
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
-    },
-    {
-      id: 'TABLEAU_QUALITY',
-      name: 'Quality Metrics',
-      description: 'Quality assurance overview',
-      icon: '✨',
-      color: 'from-green-500 to-green-600',
-      bgHover: 'hover:from-green-50/50',
-      // Add your other dashboard URLs here
-      dashboardUrl: 'https://insights.citigroup.net/t/GCT/views/TMAnalyticalEngine-NAM17344285020630/1-NAMQEFunctionalTestSummary'
-    }
-  ];
 
   // Tab configuration
   const tabs = [
@@ -124,6 +84,20 @@ export default function Analytics() {
     { id: 'noStepsExpectedResults', label: 'No Steps Expected Results', icon: '⚠️', color: '#EF4444' },
     { id: 'emptyTestSteps', label: 'Empty Test Steps', icon: '📝', color: '#8B5CF6' },
     { id: 'emptyExpectedResults', label: 'Empty Expected Results', icon: '❌', color: '#EC4899' }
+  ];
+
+  // Executive tools configuration
+  const executiveTools = [
+    {
+      id: 'EXECUTIVE_DASHBOARD',
+      name: 'Executive Dashboard',
+      description: 'High-level KPI dashboard',
+      icon: '📈',
+      color: 'from-indigo-500 to-indigo-600',
+      bgHover: 'hover:from-indigo-50/50',
+      // EDIT THIS URL TO CHANGE THE IFRAME SOURCE
+      iframeUrl: 'https://lookerstudio.google.com/embed/reporting/8228b10c-da8d-4a12-8dc0-12bcd17863c2/page/PjTHF'
+    }
   ];
 
   // Operational tools configuration
@@ -188,67 +162,9 @@ export default function Analytics() {
     setUnreadNotifications(count);
   }, [notifications]);
 
-  // Reset states when switching between executive and operational
-  useEffect(() => {
-    if (selectedSection === 'executive') {
-      // Clear operational states
-      setSelectedTool(null);
-      setProjects([]);
-      setReleases([]);
-      setSelectedProject(null);
-      setSelectedRelease(null);
-      setReportGenerated(false);
-      setReportViewed(false);
-      setReportData({
-        lastRefresh: null,
-        unmappedUserStories: [],
-        unmappedTestCases: [],
-        countNullValues: [],
-        noStepsExpectedResults: [],
-        emptyTestSteps: [],
-        emptyExpectedResults: []
-      });
-      setError(null);
-    } else if (selectedSection === 'operational') {
-      // Clear executive states
-      setSelectedExecutiveTool(null);
-      setTableauUrl('');
-      setIsTableauLoading(false);
-      setTableauError(null);
-    }
-  }, [selectedSection]);
-
-  // Handle executive tool selection
-  const handleExecutiveToolSelect = (toolId) => {
-    const tool = executiveTools.find(t => t.id === toolId);
-    if (tool) {
-      setSelectedSection('executive');
-      setSelectedExecutiveTool(tool);
-      setTableauUrl(tool.dashboardUrl);
-      setIsTableauLoading(true);
-      setTableauError(null);
-      
-      const newNotification = {
-        id: Date.now(),
-        title: `${tool.name} Selected`,
-        message: `Loading ${tool.name} dashboard from Tableau.`,
-        date: new Date().toLocaleString(),
-        read: false,
-        type: "info"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-    }
-  };
-
-  // Handle operational tool selection
-  const handleOperationalToolSelect = (toolId) => {
-    setSelectedSection('operational');
-    setSelectedTool(toolId);
-  };
-
   // Reset states when tool changes
   useEffect(() => {
-    if (selectedTool && selectedSection === 'operational') {
+    if (selectedTool) {
       setProjects([]);
       setReleases([]);
       setSelectedProject(null);
@@ -280,7 +196,25 @@ export default function Analytics() {
         setNotifications(prev => [newNotification, ...prev]);
       }
     }
-  }, [selectedTool, selectedSection]);
+  }, [selectedTool]);
+
+  // Reset states when executive tool changes
+  useEffect(() => {
+    if (selectedExecutiveTool) {
+      const tool = executiveTools.find(t => t.id === selectedExecutiveTool);
+      if (tool) {
+        const newNotification = {
+          id: Date.now(),
+          title: `${tool.name} Selected`,
+          message: `Now viewing ${tool.name}.`,
+          date: new Date().toLocaleString(),
+          read: false,
+          type: "info"
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+      }
+    }
+  }, [selectedExecutiveTool]);
 
   // Reset states when project changes
   useEffect(() => {
@@ -388,6 +322,16 @@ export default function Analytics() {
 
   const handleReleaseSelect = (release) => {
     setSelectedRelease(release);
+  };
+
+  const handleToolSelect = (toolId) => {
+    setSelectedTool(toolId);
+    setSelectedExecutiveTool(null);
+  };
+
+  const handleExecutiveToolSelect = (toolId) => {
+    setSelectedExecutiveTool(toolId);
+    setSelectedTool(null);
   };
 
   const handleGenerateReport = async () => {
@@ -1387,7 +1331,7 @@ export default function Analytics() {
             </button>
             <div 
               className={`overflow-hidden transition-all duration-300 ${
-                isExecutiveExpanded ? 'max-h-[500px]' : 'max-h-0'
+                isExecutiveExpanded ? 'max-h-96' : 'max-h-0'
               }`}
             >
               <div className="px-5 pl-14 py-3 space-y-2">
@@ -1396,20 +1340,20 @@ export default function Analytics() {
                     key={tool.id}
                     onClick={() => handleExecutiveToolSelect(tool.id)}
                     className={`w-full relative overflow-hidden rounded-xl border transition-all duration-200 ${
-                      selectedExecutiveTool?.id === tool.id
+                      selectedExecutiveTool === tool.id
                         ? 'bg-gradient-to-br from-white to-gray-50 border-gray-300 shadow-sm'
                         : 'bg-white border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    {selectedExecutiveTool?.id === tool.id && (
-                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-purple-400 to-purple-600" />
+                    {selectedExecutiveTool === tool.id && (
+                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-400 to-indigo-600" />
                     )}
                     
                     <div className="relative z-10 p-4 flex items-center space-x-3">
                       <span className="text-3xl">{tool.icon}</span>
                       <div className="flex-1 text-left">
                         <h4 className={`text-sm font-semibold ${
-                          selectedExecutiveTool?.id === tool.id ? 'text-gray-900' : 'text-gray-700'
+                          selectedExecutiveTool === tool.id ? 'text-gray-900' : 'text-gray-700'
                         }`}>
                           {tool.name}
                         </h4>
@@ -1417,8 +1361,8 @@ export default function Analytics() {
                           {tool.description}
                         </p>
                       </div>
-                      {selectedExecutiveTool?.id === tool.id && (
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-600">
+                      {selectedExecutiveTool === tool.id && (
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-600">
                           <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L7 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
@@ -1457,7 +1401,7 @@ export default function Analytics() {
                 {operationalTools.map((tool) => (
                   <button
                     key={tool.id}
-                    onClick={() => handleOperationalToolSelect(tool.id)}
+                    onClick={() => handleToolSelect(tool.id)}
                     className={`w-full relative overflow-hidden rounded-xl border transition-all duration-200 ${
                       selectedTool === tool.id
                         ? 'bg-gradient-to-br from-white to-gray-50 border-gray-300 shadow-sm'
@@ -1520,9 +1464,9 @@ export default function Analytics() {
             <span className="text-2xl">🗂</span>
           </button>
           
-          {(selectedTool || selectedExecutiveTool) && (
+          {selectedTool && (
             <div className="mt-auto mb-4">
-              {selectedSection === 'operational' && operationalTools.map((tool) => (
+              {operationalTools.map((tool) => (
                 selectedTool === tool.id && (
                   <span
                     key={tool.id}
@@ -1533,8 +1477,13 @@ export default function Analytics() {
                   </span>
                 )
               ))}
-              {selectedSection === 'executive' && executiveTools.map((tool) => (
-                selectedExecutiveTool?.id === tool.id && (
+            </div>
+          )}
+          
+          {selectedExecutiveTool && (
+            <div className="mt-auto mb-4">
+              {executiveTools.map((tool) => (
+                selectedExecutiveTool === tool.id && (
                   <span
                     key={tool.id}
                     className="text-3xl"
@@ -1551,6 +1500,48 @@ export default function Analytics() {
     </div>
   );
 
+  const ExecutiveIframeView = () => {
+    const selectedTool = executiveTools.find(t => t.id === selectedExecutiveTool);
+    
+    if (!selectedTool) return null;
+    
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 animate-fadeIn">
+              <span className="text-3xl">{selectedTool.icon}</span>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">{selectedTool.name}</h2>
+                <p className="text-sm text-gray-500">{selectedTool.description}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedExecutiveTool(null);
+              }}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Close Dashboard →
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex-1 bg-gray-50 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full">
+            <iframe
+              src={selectedTool.iframeUrl}
+              className="w-full h-full rounded-lg"
+              title={selectedTool.name}
+              frameBorder="0"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const WelcomeScreen = () => (
     <div className="flex-1 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
       <div className="max-w-2xl mx-auto text-center px-8">
@@ -1566,22 +1557,21 @@ export default function Analytics() {
         </h1>
         
         <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-          Get started by selecting an analytics tool from the <span className="font-semibold text-purple-600">Executive</span> or 
-          <span className="font-semibold text-blue-600"> Operational</span> sections in the left panel.
+          Get started by selecting an analytics tool from the <span className="font-semibold text-indigo-600">Executive</span> or 
+          <span className="font-semibold text-green-600"> Operational</span> section in the left panel.
         </p>
         
         <div className="grid grid-cols-2 gap-8 mt-12">
-          {/* Executive Section */}
-          <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
-            <h3 className="text-xl font-semibold text-purple-900 mb-4 flex items-center justify-center">
-              <span className="text-3xl mr-2">💼</span>
-              Executive Dashboards
+          <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300">
+            <h3 className="font-semibold text-lg text-gray-800 mb-3 flex items-center">
+              <span className="text-2xl mr-2">💼</span>
+              Executive Tools
             </h3>
             <div className="space-y-3">
               {executiveTools.map((tool) => (
                 <div
                   key={tool.id}
-                  className="bg-white rounded-lg p-4 border border-purple-100 hover:border-purple-300 hover:shadow-md transition-all duration-300 cursor-pointer"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
                   onClick={() => {
                     handleExecutiveToolSelect(tool.id);
                     if (isPanelCollapsed) {
@@ -1590,43 +1580,38 @@ export default function Analytics() {
                     setIsExecutiveExpanded(true);
                   }}
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{tool.icon}</span>
-                    <div className="text-left">
-                      <h4 className="font-medium text-gray-800">{tool.name}</h4>
-                      <p className="text-xs text-gray-600">{tool.description}</p>
-                    </div>
+                  <span className="text-2xl mr-3">{tool.icon}</span>
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-800">{tool.name}</h4>
+                    <p className="text-xs text-gray-600">{tool.description}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
           
-          {/* Operational Section */}
-          <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-            <h3 className="text-xl font-semibold text-blue-900 mb-4 flex items-center justify-center">
-              <span className="text-3xl mr-2">🗂</span>
-              Operational Reports
+          <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300">
+            <h3 className="font-semibold text-lg text-gray-800 mb-3 flex items-center">
+              <span className="text-2xl mr-2">🗂</span>
+              Operational Tools
             </h3>
             <div className="space-y-3">
               {operationalTools.map((tool) => (
                 <div
                   key={tool.id}
-                  className="bg-white rounded-lg p-4 border border-blue-100 hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer"
+                  className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
                   onClick={() => {
-                    handleOperationalToolSelect(tool.id);
+                    handleToolSelect(tool.id);
                     if (isPanelCollapsed) {
                       setIsPanelCollapsed(false);
                     }
                     setIsOperationalExpanded(true);
                   }}
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{tool.icon}</span>
-                    <div className="text-left">
-                      <h4 className="font-medium text-gray-800">{tool.name}</h4>
-                      <p className="text-xs text-gray-600">{tool.description}</p>
-                    </div>
+                  <span className="text-2xl mr-3">{tool.icon}</span>
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-800">{tool.name}</h4>
+                    <p className="text-xs text-gray-600">{tool.description}</p>
                   </div>
                 </div>
               ))}
@@ -1640,234 +1625,6 @@ export default function Analytics() {
       </div>
     </div>
   );
-
-  const TableauDashboard = () => {
-    const tableauRef = useRef(null);
-    const scriptRef = useRef(null);
-    const [authError, setAuthError] = useState(false);
-
-    useEffect(() => {
-      // First, check if we can access Tableau at all
-      const checkTableauAccess = async () => {
-        try {
-          // Try to load the Tableau API script
-          const testScript = document.createElement('script');
-          testScript.src = 'https://insights.citigroup.net/javascripts/api/tableau.embedding.3.latest.min.js';
-          
-          testScript.onerror = () => {
-            console.error('Cannot load Tableau API - likely authentication issue');
-            setAuthError(true);
-            setIsTableauLoading(false);
-          };
-          
-          testScript.onload = () => {
-            console.log('Tableau API accessible');
-            setAuthError(false);
-            loadTableauDashboard();
-          };
-          
-          document.head.appendChild(testScript);
-          scriptRef.current = testScript;
-        } catch (error) {
-          console.error('Error checking Tableau access:', error);
-          setAuthError(true);
-          setIsTableauLoading(false);
-        }
-      };
-
-      const loadTableauDashboard = () => {
-        if (!tableauRef.current || !selectedExecutiveTool) return;
-
-        // Remove any existing tableau-viz element
-        const existingViz = tableauRef.current.querySelector('tableau-viz');
-        if (existingViz) {
-          existingViz.remove();
-        }
-
-        // Create new tableau-viz element
-        const tableauViz = document.createElement('tableau-viz');
-        tableauViz.setAttribute('id', 'tableau-viz');
-        tableauViz.setAttribute('src', selectedExecutiveTool.dashboardUrl);
-        tableauViz.setAttribute('width', '100%');
-        tableauViz.setAttribute('height', '100%');
-        tableauViz.setAttribute('toolbar', 'bottom');
-        
-        // Add event listeners
-        tableauViz.addEventListener('firstinteractive', () => {
-          console.log('Tableau dashboard interactive');
-          setIsTableauLoading(false);
-          const newNotification = {
-            id: Date.now(),
-            title: "Dashboard Loaded",
-            message: `${selectedExecutiveTool.name} has been loaded successfully.`,
-            date: new Date().toLocaleString(),
-            read: false,
-            type: "success"
-          };
-          setNotifications(prev => [newNotification, ...prev]);
-        });
-
-        tableauViz.addEventListener('error', (e) => {
-          console.error('Tableau viz error:', e);
-          setTableauError('Failed to load dashboard. This may be due to permissions or authentication.');
-          setIsTableauLoading(false);
-        });
-
-        // Append to container
-        tableauRef.current.appendChild(tableauViz);
-      };
-
-      if (selectedExecutiveTool) {
-        setIsTableauLoading(true);
-        checkTableauAccess();
-      }
-
-      // Cleanup
-      return () => {
-        if (scriptRef.current && scriptRef.current.parentNode) {
-          scriptRef.current.parentNode.removeChild(scriptRef.current);
-        }
-        if (tableauRef.current) {
-          const vizElement = tableauRef.current.querySelector('tableau-viz');
-          if (vizElement) {
-            vizElement.remove();
-          }
-        }
-      };
-    }, [selectedExecutiveTool]);
-
-    const openInNewTab = () => {
-      window.open(selectedExecutiveTool.dashboardUrl, '_blank');
-      const newNotification = {
-        id: Date.now(),
-        title: "Dashboard Opened",
-        message: `${selectedExecutiveTool.name} opened in a new tab.`,
-        date: new Date().toLocaleString(),
-        read: false,
-        type: "info"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-    };
-
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <span className="text-3xl">{selectedExecutiveTool.icon}</span>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">{selectedExecutiveTool.name}</h2>
-                <p className="text-sm text-gray-500">{selectedExecutiveTool.description}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={openInNewTab}
-                className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
-              >
-                Open in New Tab ↗
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedExecutiveTool(null);
-                  setSelectedSection(null);
-                  setTableauUrl('');
-                  setTableauError(null);
-                  setAuthError(false);
-                }}
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                Change Dashboard →
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 bg-gray-50 p-6">
-          <div className="h-full bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
-            {isTableauLoading && (
-              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Loading Tableau dashboard...</p>
-                </div>
-              </div>
-            )}
-            
-            {(tableauError || authError) && (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center max-w-md">
-                  <div className="text-6xl mb-4">{authError ? '🔐' : '⚠️'}</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    {authError ? 'Authentication Required' : 'Failed to Load Dashboard'}
-                  </h3>
-                  <p className="text-gray-500 mb-6">
-                    {authError 
-                      ? 'You need to authenticate with Tableau Server to view embedded dashboards.'
-                      : tableauError || 'Unable to load the dashboard.'}
-                  </p>
-                  
-                  <div className="space-y-3">
-                    <button
-                      onClick={openInNewTab}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Open Dashboard in New Tab
-                    </button>
-                    
-                    {!authError && (
-                      <button
-                        onClick={() => {
-                          setTableauError(null);
-                          setIsTableauLoading(true);
-                          setAuthError(false);
-                          // Retry loading
-                          const existingScript = document.querySelector('script[src*="tableau.embedding"]');
-                          if (existingScript) {
-                            existingScript.remove();
-                          }
-                          if (tableauRef.current) {
-                            const vizElement = tableauRef.current.querySelector('tableau-viz');
-                            if (vizElement) {
-                              vizElement.remove();
-                            }
-                          }
-                        }}
-                        className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                      >
-                        Retry Embedding
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-left">
-                    <p className="text-sm text-amber-800">
-                      <strong>Tip:</strong> If you see this message frequently:
-                    </p>
-                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
-                      <li>Make sure you're logged into Tableau Server</li>
-                      <li>Check that you have permissions for this dashboard</li>
-                      <li>Try opening the dashboard in a new tab first</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!tableauError && !authError && (
-              <div 
-                ref={tableauRef} 
-                className="w-full h-full"
-                style={{ minHeight: '600px' }}
-              >
-                {/* Tableau viz will be dynamically inserted here */}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
@@ -1987,9 +1744,9 @@ export default function Analytics() {
         <BeautifulPanel />
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          {selectedSection === 'executive' && selectedExecutiveTool ? (
-            <TableauDashboard />
-          ) : selectedSection === 'operational' && selectedTool ? (
+          {selectedExecutiveTool ? (
+            <ExecutiveIframeView />
+          ) : selectedTool ? (
             <>
               <div className="bg-white border-b border-gray-200 px-6 py-4">
                 <div className="flex items-center justify-between mb-4">
@@ -2009,7 +1766,6 @@ export default function Analytics() {
                   <button
                     onClick={() => {
                       setSelectedTool(null);
-                      setSelectedSection(null);
                       setProjects([]);
                       setReleases([]);
                       setSelectedProject(null);
