@@ -1,510 +1,189 @@
-"use client";
-import { useState, useEffect, useMemo } from "react";
-import { useUser } from "@auth0/nextjs-auth0/client";
- 
-export default function TestTree({ 
-  onSelectUserStory, 
-  onSelectRelease, 
-  onSelectProject, 
-  onProjectsDataLoad, 
-  searchQuery = "",
-  selectedNode = null
-}) {
-  const [testData, setTestData] = useState([]);
-  const [expandedItems, setExpandedItems] = useState(new Set());
-  const [accessToken, setAccessToken] = useState(null);
-  const { user } = useUser();
-  
-  // ADD THESE NEW STATE VARIABLES
-  const [viewMode, setViewMode] = useState('testCases'); // 'testCases' or 'codeBuilder'
-  const [showDropdown, setShowDropdown] = useState(false);
-
-  useEffect(() => {
-    // Function to fetch access token
-    const fetchAccessToken = async () => {
-      try {
-        const res = await fetch("/api/auth/token");
-        const data = await res.json();
-
-        if (res.ok) {
-          setAccessToken(data.accessToken);
-        } else {
-          console.error("Error fetching token:", data.error);
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-      }
-    };
-
-    fetchAccessToken();
-  }, []);
-
-  useEffect(() => {
-    // Fetch project data with the access token
-    if (!accessToken) return;
-    
-    fetch(`/api/projects-with-releases`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "x-user-email": user?.email,
-        "Content-Type": "application/json"
-      }
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (data.projects) {
-          // Ensure valid data structure and unique IDs
-          const formattedData = data.projects.map((project) => ({
-            id: `proj-${project.project_id}`,
-            name: project.project_name,
-            children: project.releases ? project.releases.map((release) => ({
-              id: `rel-${release.release_id}`,
-              name: `${release.version}`,
-              children: release.user_stories ? release.user_stories.map((story) => ({
-                id: `us-${release.release_id}-${story.user_story_id}`, // Unique ID
-                name: story.user_story_title,
-              })) : [],
-            })) : [],
-          }));
-
-          setTestData(formattedData);
-  
-          // Pass the original data to the parent component for context panel
-          if (onProjectsDataLoad) {
-            onProjectsDataLoad(data.projects);
-          }
-
-          // Expand all projects by default
-          setExpandedItems(new Set(getAllItemIds(formattedData)));
-        }
-      })
-      .catch((error) => console.error("Error loading project data:", error));
-  }, [accessToken]);
-
-  // Add this useEffect to auto-expand parents of selected node
-  useEffect(() => {
-    if (selectedNode && selectedNode.id && testData.length > 0) {
-      const nodePath = findNodePath(testData, selectedNode.id);
-      
-      if (nodePath) {
-        // Expand all nodes in the path to the selected node
-        setExpandedItems(prev => {
-          const newSet = new Set(prev);
-          nodePath.forEach(id => newSet.add(id));
-          return newSet;
-        });
-      }
-    }
-  }, [selectedNode, testData]);
-
-  // ADD THIS useEffect to handle clicks outside dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.dropdown-container')) {
-        setShowDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Helper function to find a node and its path in the tree
-  const findNodePath = (nodes, targetId, currentPath = []) => {
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      const newPath = [...currentPath, node.id];
-      
-      if (node.id === targetId) {
-        return newPath;
-      }
-      
-      if (node.children && node.children.length > 0) {
-        const foundPath = findNodePath(node.children, targetId, newPath);
-        if (foundPath) {
-          return foundPath;
-        }
-      }
-    }
-    
-    return null;
-  };
-
-  // Advanced search function with hierarchical tree preservation
-  const filterTestData = (data, query) => {
-    if (!query) return data; // Return full data if query is empty
-
-    const lowerCaseQuery = query.toLowerCase().trim();
-    
-    // First identify all matches by their IDs
-    const matchingIds = new Set();
-    const parentMap = new Map(); // Map to store child->parent relationships
-    
-    // Function to check if a node matches and collect its ID and parent relationships
-    const collectMatches = (node, parentId = null) => {
-      // Store parent relationship
-      if (parentId) {
-        parentMap.set(node.id, parentId);
-      }
-      
-      // Check if current node matches
-      const nodeMatches = node.name.toLowerCase().includes(lowerCaseQuery);
-      if (nodeMatches) {
-        matchingIds.add(node.id);
-      }
-      
-      // Process children
-      if (node.children) {
-        node.children.forEach(child => {
-          collectMatches(child, node.id);
-        });
-      }
-      
-      return nodeMatches;
-    };
-    
-    // First pass: collect all matching nodes and build parent relationships
-    data.forEach(node => collectMatches(node));
-    
-    // Add all ancestors of matching nodes to the matching set
-    const addAncestors = (id) => {
-      const parentId = parentMap.get(id);
-      if (parentId) {
-        matchingIds.add(parentId);
-        addAncestors(parentId);
-      }
-    };
-    
-    // Add ancestors for all matching nodes
-    Array.from(matchingIds).forEach(id => {
-      addAncestors(id);
-    });
-    
-    // Function to create a filtered tree structure
-    const filterTreeByIds = (node) => {
-      // If this node isn't in our matching set, filter it out
-      if (!matchingIds.has(node.id)) {
-        return null;
-      }
-      
-      // Include this node, but filter its children
-      const filteredNode = { ...node };
-      
-      if (node.children) {
-        const filteredChildren = node.children
-          .map(filterTreeByIds)
-          .filter(Boolean); // Remove null entries
-        
-        filteredNode.children = filteredChildren;
-      }
-      
-      return filteredNode;
-    };
-    
-    // Final filtered tree
-    const filteredData = data
-      .map(filterTreeByIds)
-      .filter(Boolean); // Remove null entries
-    
-    return filteredData;
-  };
-
-  // Memoize filtered data to avoid recalculating on every render
-  const filteredData = useMemo(() => 
-    filterTestData(testData, searchQuery), 
-    [testData, searchQuery]
-  );
-
-  // Update expandedItems dynamically based on search query
-  useEffect(() => {
-    if (searchQuery) {
-      // Always expand all items when searching
-      const allItemIds = getAllItemIds(filteredData);
-      setExpandedItems(new Set(allItemIds));
-    }
-  }, [searchQuery, filteredData]);
- 
-  // Helper function to get all IDs for expansion
-  function getAllItemIds(nodes) {
-    let ids = [];
-    const collectIds = (items) => {
-      if (!Array.isArray(items)) return; // Ensure items is an array
-      items.forEach(item => {
-        ids.push(item.id);
-        if (item.children && item.children.length > 0) {
-          collectIds(item.children);
-        }
-      });
-    };
-    collectIds(nodes);
-    return ids;
-  }
-
-  // Function to handle expand/collapse caret clicks
-  const handleCaretClick = (e, itemId) => {
-    e.stopPropagation(); // Prevent the click from bubbling up to the node
-    
-    setExpandedItems((prevExpanded) => {
-      const newExpanded = new Set(prevExpanded);
-      if (newExpanded.has(itemId)) {
-        newExpanded.delete(itemId); // Collapse if already expanded
-      } else {
-        newExpanded.add(itemId); // Expand if collapsed
-      }
-      return newExpanded;
-    });
-  };
-
-  // Highlight text with search term
-  const highlightText = (text, searchTerm) => {
-    if (!searchTerm) return text;
-    
-    try {
-      const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      const parts = text.split(regex);
-      
-      return (
-        <>
-          {parts.map((part, index) => 
-            part.toLowerCase() === searchTerm.toLowerCase() 
-              ? <span key={index} className="bg-yellow-200 text-gray-900 font-semibold">{part}</span> 
-              : <span key={index}>{part}</span>
-          )}
-        </>
-      );
-    } catch (e) {
-      return text;
-    }
-  };
-
-  // VSCode-style TreeItem component (Light Theme)
-  const VSCodeTreeItem = ({ node, level }) => {
-    const isProject = node.id.startsWith('proj-');
-    const isRelease = node.id.startsWith('rel-');
-    const isUserStory = node.id.startsWith('us-');
-    
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = expandedItems.has(node.id);
-    
-    // Add a check to see if this node is the selected one
-    const isSelected = selectedNode && node.id === selectedNode.id;
-    
-    // Determine icon based on node type
-    let icon = '📁'; // Default for projects
-    if (isRelease) icon = '📄';
-    if (isUserStory) icon = '📌';
-    
-    // Determine node type for title
-    let itemType = 'Project';
-    if (isRelease) itemType = 'Release';
-    if (isUserStory) itemType = 'User Story';
-    
-    // Handle node selection (not expanding)
-    const handleNodeClick = () => {
-      window.scrollTo(0, 0);
-      if (isProject && onSelectProject) {
-        onSelectProject(node);
-      } else if (isRelease && onSelectRelease) {
-        onSelectRelease(node);
-      } else if (isUserStory && onSelectUserStory) {
-        onSelectUserStory(node);
-      }
-    };
-    
-    // Calculate text content to display
-    const displayText = `${node.name}`;
-    
-    // Determine correct indentation - VSCode style uses 8px per level + 8px for arrow
-    const indentation = (level * 8) + 8;
-
-    return (
-      <>
-        <div 
-          className={`flex items-center h-[22px] ${
-            isSelected 
-              ? 'bg-[#e8f0fe] text-[#0057e7]' // Highlight color when selected
-              : 'hover:bg-gray-100'
-          } relative group transition-colors duration-200`}
-          style={{ paddingLeft: `${indentation}px` }}
-        >
-          {/* VSCode-style chevron */}
-          <div 
-            className={`flex items-center justify-center w-[16px] h-[22px] flex-shrink-0 cursor-pointer ${!hasChildren ? 'opacity-0' : ''}`}
-            onClick={(e) => hasChildren && handleCaretClick(e, node.id)}
-          >
-            <svg 
-              className={`h-[16px] w-[16px] transform transition-transform duration-100 ease-in-out ${
-                isSelected ? 'text-[#0057e7]' : 'text-gray-600'} 
-                ${isExpanded ? 'rotate-90' : ''}`}
-              viewBox="0 0 16 16"
-              fill="currentColor"
-            >
-              <path fillRule="evenodd" clipRule="evenodd" d="M10.072 8.024L5.715 3.667l.618-.62L11 8.026l-4.678 4.678-.618-.62 4.368-4.357z" />
-            </svg>
-          </div>
-          
-          {/* Icon + Text, taking all remaining width */}
-          <div 
-            className="flex items-center flex-grow truncate cursor-pointer pl-[6px] h-full"
-            onClick={handleNodeClick}
-            title={`${itemType}: ${node.name}`}
-          >
-            <span className={`text-[14px] ${
-              isSelected 
-                ? "font-medium text-[#0057e7]" // Change text color when selected
-                : isProject 
-                  ? "font-medium text-gray-900" 
-                  : "text-gray-800"
-            }`}>
-              <span className="mr-[6px]">{icon}</span>
-              <span className="truncate">{highlightText(displayText, searchQuery)}</span>
-            </span>
-          </div>
+{/* Replace the existing div content with this */}
+<div className="flex flex-col h-full bg-gray-50">
+  {/* Header */}
+  <div className="bg-white border-b border-gray-200 p-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center space-x-3">
+        <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+          <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
         </div>
-        
-        {/* Render children if expanded */}
-        {isExpanded && node.children && node.children.length > 0 && (
-          <>
-            {node.children.map(childNode => (
-              <VSCodeTreeItem 
-                key={childNode.id} 
-                node={childNode} 
-                level={level + 1} 
-              />
-            ))}
-          </>
-        )}
-      </>
-    );
-  };
-
-  return (
-    <div className="h-full w-full overflow-hidden bg-white">
-      <div className="h-full overflow-hidden flex flex-col">
-        {/* UPDATED HEADER WITH DROPDOWN */}
-        <div className="relative dropdown-container">
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="w-full flex items-center justify-between text-[14px] uppercase font-semibold text-gray-700 tracking-wide p-2 hover:bg-gray-50 transition-colors"
-          >
-            <span className="flex items-center">
-              {viewMode === 'testCases' ? (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  Test Cases
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                  Code Builder
-                </>
-              )}
-            </span>
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className={`h-4 w-4 transition-transform ${showDropdown ? 'rotate-180' : ''}`} 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          
-          {/* Dropdown Menu */}
-          {showDropdown && (
-            <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-b-md shadow-lg z-20">
-              <button
-                onClick={() => {
-                  setViewMode('testCases');
-                  setShowDropdown(false);
-                }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
-                  viewMode === 'testCases' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                Test Cases
-              </button>
-              <button
-                onClick={() => {
-                  setViewMode('codeBuilder');
-                  setShowDropdown(false);
-                }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
-                  viewMode === 'codeBuilder' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-                Code Builder
-              </button>
-            </div>
-          )}
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Code Builder Assistant</h2>
+          <p className="text-sm text-gray-500">Upload files and describe what you want to build</p>
         </div>
-        
-        {/* UPDATED CONTENT AREA */}
-        <div className="overflow-y-auto overflow-x-hidden flex-grow">
-          {viewMode === 'testCases' ? (
-            // Test Cases View (existing tree)
-            searchQuery && filteredData.length === 0 ? (
-              <div className="px-2 py-1 text-[13px] text-gray-500">No results found for "{searchQuery}"</div>
-            ) : filteredData.length === 0 ? (
-              <div className="px-2 py-1 text-[13px] text-gray-500">No test cases available</div>
-            ) : (
-              <div className="py-1">
-                {filteredData.map(node => (
-                  <VSCodeTreeItem 
-                    key={node.id} 
-                    node={node} 
-                    level={0} 
-                  />
-                ))}
-              </div>
-            )
-          ) : (
-            // Code Builder View (placeholder for recent chats)
-            <div className="p-4">
-              <div className="text-sm text-gray-600 mb-4">Recent Chats</div>
-              <div className="space-y-2">
-                {/* Placeholder items - replace with actual recent chats later */}
-                <div className="p-3 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer transition-colors">
-                  <div className="font-medium text-sm">Chat Session 1</div>
-                  <div className="text-xs text-gray-500 mt-1">2 hours ago</div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer transition-colors">
-                  <div className="font-medium text-sm">Chat Session 2</div>
-                  <div className="text-xs text-gray-500 mt-1">Yesterday</div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer transition-colors">
-                  <div className="font-medium text-sm">Chat Session 3</div>
-                  <div className="text-xs text-gray-500 mt-1">2 days ago</div>
-                </div>
-              </div>
-              <div className="mt-4 text-center">
-                <button className="text-sm text-blue-600 hover:text-blue-800">
-                  View All Chats
-                </button>
-              </div>
-            </div>
-          )}
+      </div>
+      
+      {/* Model Selector */}
+      <div className="flex items-center space-x-2">
+        <span className="text-sm text-gray-500">Model:</span>
+        <select className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option>GPT-4</option>
+          <option>Claude 3</option>
+          <option>Gemini Pro</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {/* Messages Area */}
+  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    {/* Empty State */}
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mb-4">
+        <svg className="h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      </div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Code Builder</h3>
+      <p className="text-gray-500 max-w-md">
+        Upload your project files and describe what you want to create. Our AI will generate the code for you.
+      </p>
+      <div className="mt-6 flex items-center space-x-4">
+        <div className="flex items-center space-x-2 text-sm text-gray-600">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>Support for multiple file types</span>
+        </div>
+        <div className="flex items-center space-x-2 text-sm text-gray-600">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>Instant code generation</span>
         </div>
       </div>
     </div>
+
+    {/* Sample Message Structure (Hidden by default, shown when messages exist) */}
+    {/* User Message Example
+    <div className="flex justify-end">
+      <div className="max-w-3xl">
+        <div className="rounded-lg p-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-blue-100">You</span>
+            <span className="text-xs text-blue-100">2:34 PM</span>
+          </div>
+          <p className="mb-3">Create a React component for a user dashboard with authentication</p>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2 bg-white/10 rounded p-2">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="text-sm flex-1">auth.config.js</span>
+              <span className="text-xs opacity-75">2.4 KB</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    */}
+
+    {/* AI Response Example
+    <div className="flex justify-start">
+      <div className="max-w-3xl">
+        <div className="rounded-lg p-4 bg-white border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500">AI Assistant</span>
+            <span className="text-xs text-gray-500">2:35 PM</span>
+          </div>
+          <p className="mb-3 text-gray-800">I've analyzed your files and generated the following code based on your requirements:</p>
+          <div className="space-y-3">
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  <span className="font-medium text-gray-900">Dashboard.jsx</span>
+                  <span className="text-xs text-gray-500">3.2 KB</span>
+                </div>
+                <button className="p-1 hover:bg-gray-200 rounded transition-colors">
+                  <svg className="h-4 w-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+              </div>
+              <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto">
+                <code>{`import React from 'react';
+import { useAuth } from './hooks/useAuth';
+
+export function Dashboard() {
+  const { user } = useAuth();
+  
+  return (
+    <div className="dashboard">
+      <h1>Welcome, {user.name}</h1>
+    </div>
   );
-}
+}`}</code>
+              </pre>
+            </div>
+            <button className="w-full mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Download All Files</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    */}
+  </div>
+
+  {/* Input Area */}
+  <div className="bg-white border-t border-gray-200 p-4">
+    {/* Uploaded Files Preview (shown when files are selected) */}
+    {/* 
+    <div className="mb-3 flex flex-wrap gap-2">
+      <div className="flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span>config.json</span>
+        <button className="ml-1 hover:text-blue-900">
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+    */}
+
+    {/* Input Controls */}
+    <div className="flex items-end space-x-3">
+      <input type="file" id="file-upload" multiple className="hidden" accept=".js,.jsx,.ts,.tsx,.py,.java,.cpp,.c,.h,.css,.scss,.html,.json,.xml,.yaml,.yml" />
+      
+      <label htmlFor="file-upload" className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer group">
+        <svg className="h-5 w-5 text-gray-600 group-hover:text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+      </label>
+
+      <div className="flex-1 relative">
+        <textarea
+          placeholder="Describe what you want to build..."
+          className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          rows="3"
+        />
+        <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+          Press Enter to send
+        </div>
+      </div>
+
+      <button className="p-3 bg-gray-100 text-gray-400 rounded-lg transition-colors">
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+      </button>
+    </div>
+
+    {/* Helper Text */}
+    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+      <span>Supported: JS, TS, Python, Java, C++, CSS, HTML, JSON, YAML</span>
+      <span>Max file size: 10MB</span>
+    </div>
+  </div>
+</div>
