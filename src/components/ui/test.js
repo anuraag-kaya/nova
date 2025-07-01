@@ -1,6 +1,6 @@
 <div className="flex h-full bg-gradient-to-br from-gray-50 to-gray-100">
- {/* Left Panel - Generated Code Display - Now takes more space */}
- <div className="flex-1 flex flex-col h-full border-r border-gray-200">
+ {/* Left Panel - Generated Code Display - Back to 50% */}
+ <div className="w-1/2 flex flex-col h-full border-r border-gray-200">
    {/* Header */}
    <div className="bg-white shadow-sm border-b border-gray-200">
      <div className="px-6 py-4">
@@ -114,9 +114,9 @@
    </div>
  </div>
 
- {/* Right Panel - Compact Form - Now narrower */}
- <div className="w-96 bg-white flex flex-col h-full shadow-lg">
-   <div className="flex-1 overflow-y-auto p-5">
+ {/* Right Panel - Form - Back to 50% with better content arrangement */}
+ <div className="w-1/2 bg-white flex flex-col h-full shadow-lg">
+   <div className="flex-1 overflow-y-auto p-6">
      <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center">
        <svg className="w-5 h-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -124,16 +124,16 @@
        Configuration
      </h3>
      
-     {/* Compact File Upload Section */}
-     <div className="space-y-4">
-       {/* Source Copybook Files - Grid Layout */}
+     {/* Compact File Upload Section with better spacing */}
+     <div className="space-y-3">
+       {/* Source Copybook Files - Horizontal Layout */}
        <div>
          <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
            Source Copybook Files <span className="text-red-500">*</span>
          </label>
-         <div className="grid grid-cols-3 gap-2">
+         <div className="flex gap-2">
            {[0, 1, 2].map((index) => (
-             <div key={index} className={index > 0 && !sourceFiles?.[index-1] ? 'opacity-40' : ''}>
+             <div key={index} className={`flex-1 ${index > 0 && !sourceFiles?.[index-1] ? 'opacity-40' : ''}`}>
                <input 
                  type="file" 
                  id={`source-${index}`}
@@ -167,8 +167,8 @@
                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                        </svg>
                        <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
-                         {sourceFiles[index].name.length > 10 
-                           ? sourceFiles[index].name.substring(0, 10) + '...' 
+                         {sourceFiles[index].name.length > 15 
+                           ? sourceFiles[index].name.substring(0, 15) + '...' 
                            : sourceFiles[index].name}
                        </span>
                        <span className="text-[9px] text-gray-500">
@@ -193,9 +193,9 @@
        </div>
 
        {/* Target & Mapping Files - Side by Side */}
-       <div className="grid grid-cols-2 gap-3">
+       <div className="flex gap-3">
          {/* Target Copybook File */}
-         <div>
+         <div className="flex-1">
            <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
              Target File <span className="text-red-500">*</span>
            </label>
@@ -221,9 +221,7 @@
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
                    <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
-                     {targetFile.name.length > 12 
-                       ? targetFile.name.substring(0, 12) + '...' 
-                       : targetFile.name}
+                     {targetFile.name}
                    </span>
                    <span className="text-[9px] text-gray-500">
                      {(targetFile.size / 1024).toFixed(1)} KB
@@ -242,7 +240,7 @@
          </div>
 
          {/* Mapping Rules File */}
-         <div>
+         <div className="flex-1">
            <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
              Mapping Rules <span className="text-red-500">*</span>
            </label>
@@ -268,9 +266,7 @@
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
                    <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
-                     {mappingFile.name.length > 12 
-                       ? mappingFile.name.substring(0, 12) + '...' 
-                       : mappingFile.name}
+                     {mappingFile.name}
                    </span>
                    <span className="text-[9px] text-gray-500">
                      {(mappingFile.size / 1024).toFixed(1)} KB
@@ -306,18 +302,21 @@
          </select>
        </div>
 
-       {/* Instructions - Compact */}
-       <div>
+       {/* Instructions - LARGER for lengthy prompts */}
+       <div className="flex-1 flex flex-col">
          <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
            Instructions <span className="text-xs font-normal text-gray-500">(Optional)</span>
          </label>
          <textarea
-           placeholder="Specific requirements..."
-           className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-           rows="3"
+           placeholder="Add detailed instructions for code generation. You can include specific requirements, patterns to follow, naming conventions, error handling preferences, and any other guidelines for the AI to follow..."
+           className="flex-1 w-full px-4 py-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm leading-relaxed"
+           style={{ minHeight: '200px' }}
            value={promptText}
            onChange={(e) => setPromptText(e.target.value)}
          />
+         <p className="text-xs text-gray-500 mt-1">
+           Tip: Be specific about your requirements for better code generation
+         </p>
        </div>
 
        {/* Generate Button */}
