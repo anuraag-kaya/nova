@@ -1,6 +1,6 @@
 <div className="flex h-full bg-gradient-to-br from-gray-50 to-gray-100">
- {/* Left Panel - Generated Code Display */}
- <div className="w-1/2 flex flex-col h-full border-r border-gray-200">
+ {/* Left Panel - Generated Code Display - Now takes more space */}
+ <div className="flex-1 flex flex-col h-full border-r border-gray-200">
    {/* Header */}
    <div className="bg-white shadow-sm border-b border-gray-200">
      <div className="px-6 py-4">
@@ -114,22 +114,26 @@
    </div>
  </div>
 
- {/* Right Panel - Form */}
- <div className="w-1/2 bg-white flex flex-col h-full">
-   <div className="flex-1 overflow-y-auto p-4">
-     <h3 className="text-lg font-bold text-gray-900 mb-4">Configuration</h3>
+ {/* Right Panel - Compact Form - Now narrower */}
+ <div className="w-96 bg-white flex flex-col h-full shadow-lg">
+   <div className="flex-1 overflow-y-auto p-5">
+     <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+       <svg className="w-5 h-5 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+       </svg>
+       Configuration
+     </h3>
      
-     {/* File Upload Section */}
-     <div className="space-y-3">
-       {/* Source Copybook Files */}
+     {/* Compact File Upload Section */}
+     <div className="space-y-4">
+       {/* Source Copybook Files - Grid Layout */}
        <div>
-         <label className="block text-sm font-medium text-gray-700 mb-1">
+         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
            Source Copybook Files <span className="text-red-500">*</span>
-           <span className="text-xs text-gray-500 ml-1">(1-3 files, .txt/.cpy/.json)</span>
          </label>
-         <div className="space-y-1">
+         <div className="grid grid-cols-3 gap-2">
            {[0, 1, 2].map((index) => (
-             <div key={index} className={index > 0 && !sourceFiles?.[index-1] ? 'opacity-50' : ''}>
+             <div key={index} className={index > 0 && !sourceFiles?.[index-1] ? 'opacity-40' : ''}>
                <input 
                  type="file" 
                  id={`source-${index}`}
@@ -145,29 +149,41 @@
                  }}
                  disabled={index > 0 && !sourceFiles?.[index-1]}
                />
-               <label htmlFor={`source-${index}`} className={`block cursor-pointer ${index > 0 && !sourceFiles?.[index-1] ? 'cursor-not-allowed' : ''}`}>
-                 <div className={`border-2 border-dashed rounded-lg p-2 transition-all ${
-                   sourceFiles?.[index] 
+               <label 
+                 htmlFor={`source-${index}`} 
+                 className={`block cursor-pointer ${index > 0 && !sourceFiles?.[index-1] ? 'cursor-not-allowed' : ''}`}
+               >
+                 <div className={`
+                   border-2 border-dashed rounded-lg p-3 h-20 flex flex-col items-center justify-center
+                   transition-all text-center
+                   ${sourceFiles?.[index] 
                      ? 'border-green-400 bg-green-50' 
                      : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
-                 }`}>
+                   }
+                 `}>
                    {sourceFiles?.[index] ? (
-                     <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-2">
-                         <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                         </svg>
-                         <span className="text-xs font-medium text-gray-900">{sourceFiles[index].name}</span>
-                       </div>
-                       <span className="text-xs text-gray-500">{(sourceFiles[index].size / 1024).toFixed(1)} KB</span>
-                     </div>
+                     <>
+                       <svg className="w-5 h-5 text-green-600 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                       </svg>
+                       <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
+                         {sourceFiles[index].name.length > 10 
+                           ? sourceFiles[index].name.substring(0, 10) + '...' 
+                           : sourceFiles[index].name}
+                       </span>
+                       <span className="text-[9px] text-gray-500">
+                         {(sourceFiles[index].size / 1024).toFixed(1)} KB
+                       </span>
+                     </>
                    ) : (
-                     <div className="flex items-center gap-2 text-gray-500">
-                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <>
+                       <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                        </svg>
-                       <span className="text-xs">{index === 0 ? 'Source file (required)' : `Source file ${index + 1} (optional)`}</span>
-                     </div>
+                       <span className="text-[10px] text-gray-500">
+                         {index === 0 ? 'Required' : `Optional ${index}`}
+                       </span>
+                     </>
                    )}
                  </div>
                </label>
@@ -176,113 +192,128 @@
          </div>
        </div>
 
-       {/* Target Copybook File */}
-       <div>
-         <label className="block text-sm font-medium text-gray-700 mb-1">
-           Target Copybook File <span className="text-red-500">*</span>
-           <span className="text-xs text-gray-500 ml-1">(.txt/.cpy/.json)</span>
-         </label>
-         <input 
-           type="file" 
-           id="target-file"
-           className="hidden" 
-           accept=".cpy,.txt,.json"
-           onChange={(e) => setTargetFile(e.target.files[0])}
-         />
-         <label htmlFor="target-file" className="block cursor-pointer">
-           <div className={`border-2 border-dashed rounded-lg p-2 transition-all ${
-             targetFile 
-               ? 'border-green-400 bg-green-50' 
-               : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
-           }`}>
-             {targetFile ? (
-               <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2">
-                   <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+       {/* Target & Mapping Files - Side by Side */}
+       <div className="grid grid-cols-2 gap-3">
+         {/* Target Copybook File */}
+         <div>
+           <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
+             Target File <span className="text-red-500">*</span>
+           </label>
+           <input 
+             type="file" 
+             id="target-file"
+             className="hidden" 
+             accept=".cpy,.txt,.json"
+             onChange={(e) => setTargetFile(e.target.files[0])}
+           />
+           <label htmlFor="target-file" className="block cursor-pointer">
+             <div className={`
+               border-2 border-dashed rounded-lg p-3 h-24 flex flex-col items-center justify-center
+               transition-all text-center
+               ${targetFile 
+                 ? 'border-green-400 bg-green-50' 
+                 : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
+               }
+             `}>
+               {targetFile ? (
+                 <>
+                   <svg className="w-5 h-5 text-green-600 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
-                   <span className="text-xs font-medium text-gray-900">{targetFile.name}</span>
-                 </div>
-                 <span className="text-xs text-gray-500">{(targetFile.size / 1024).toFixed(1)} KB</span>
-               </div>
-             ) : (
-               <div className="flex items-center gap-2 text-gray-500">
-                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                 </svg>
-                 <span className="text-xs">Click to upload target file</span>
-               </div>
-             )}
-           </div>
-         </label>
-       </div>
+                   <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
+                     {targetFile.name.length > 12 
+                       ? targetFile.name.substring(0, 12) + '...' 
+                       : targetFile.name}
+                   </span>
+                   <span className="text-[9px] text-gray-500">
+                     {(targetFile.size / 1024).toFixed(1)} KB
+                   </span>
+                 </>
+               ) : (
+                 <>
+                   <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                   </svg>
+                   <span className="text-[10px] text-gray-500">Target Copybook</span>
+                 </>
+               )}
+             </div>
+           </label>
+         </div>
 
-       {/* Mapping Rules File */}
-       <div>
-         <label className="block text-sm font-medium text-gray-700 mb-1">
-           Mapping Rules <span className="text-red-500">*</span>
-           <span className="text-xs text-gray-500 ml-1">(.json)</span>
-         </label>
-         <input 
-           type="file" 
-           id="mapping-file"
-           className="hidden" 
-           accept=".json"
-           onChange={(e) => setMappingFile(e.target.files[0])}
-         />
-         <label htmlFor="mapping-file" className="block cursor-pointer">
-           <div className={`border-2 border-dashed rounded-lg p-2 transition-all ${
-             mappingFile 
-               ? 'border-green-400 bg-green-50' 
-               : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
-           }`}>
-             {mappingFile ? (
-               <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2">
-                   <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+         {/* Mapping Rules File */}
+         <div>
+           <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
+             Mapping Rules <span className="text-red-500">*</span>
+           </label>
+           <input 
+             type="file" 
+             id="mapping-file"
+             className="hidden" 
+             accept=".json"
+             onChange={(e) => setMappingFile(e.target.files[0])}
+           />
+           <label htmlFor="mapping-file" className="block cursor-pointer">
+             <div className={`
+               border-2 border-dashed rounded-lg p-3 h-24 flex flex-col items-center justify-center
+               transition-all text-center
+               ${mappingFile 
+                 ? 'border-green-400 bg-green-50' 
+                 : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50'
+               }
+             `}>
+               {mappingFile ? (
+                 <>
+                   <svg className="w-5 h-5 text-green-600 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
-                   <span className="text-xs font-medium text-gray-900">{mappingFile.name}</span>
-                 </div>
-                 <span className="text-xs text-gray-500">{(mappingFile.size / 1024).toFixed(1)} KB</span>
-               </div>
-             ) : (
-               <div className="flex items-center gap-2 text-gray-500">
-                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                 </svg>
-                 <span className="text-xs">Click to upload mapping rules</span>
-               </div>
-             )}
-           </div>
-         </label>
+                   <span className="text-[10px] font-medium text-gray-900 truncate max-w-full px-1">
+                     {mappingFile.name.length > 12 
+                       ? mappingFile.name.substring(0, 12) + '...' 
+                       : mappingFile.name}
+                   </span>
+                   <span className="text-[9px] text-gray-500">
+                     {(mappingFile.size / 1024).toFixed(1)} KB
+                   </span>
+                 </>
+               ) : (
+                 <>
+                   <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                   </svg>
+                   <span className="text-[10px] text-gray-500">Mapping JSON</span>
+                 </>
+               )}
+             </div>
+           </label>
+         </div>
        </div>
 
-       {/* LLM Selection */}
+       {/* LLM Selection - Compact */}
        <div>
-         <label className="block text-sm font-medium text-gray-700 mb-1">
-           Select LLM <span className="text-red-500">*</span>
+         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
+           LLM Model <span className="text-red-500">*</span>
          </label>
          <select
            value={selectedLLM}
            onChange={(e) => setSelectedLLM(e.target.value)}
-           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-white"
+           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-white"
          >
-           <option value="">Choose a model...</option>
+           <option value="">Select model...</option>
            {llmModels.map(model => (
              <option key={model.id} value={model.id}>{model.name}</option>
            ))}
          </select>
        </div>
 
-       {/* Instructions */}
+       {/* Instructions - Compact */}
        <div>
-         <label className="block text-sm font-medium text-gray-700 mb-1">
-           Instructions
+         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
+           Instructions <span className="text-xs font-normal text-gray-500">(Optional)</span>
          </label>
          <textarea
-           placeholder="Add any specific requirements or instructions for the code generation..."
-           className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+           placeholder="Specific requirements..."
+           className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
            rows="3"
            value={promptText}
            onChange={(e) => setPromptText(e.target.value)}
@@ -293,13 +324,16 @@
        <button
          onClick={handleGenerateCode}
          disabled={!sourceFiles?.[0] || !targetFile || !mappingFile || !selectedLLM}
-         className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-all text-sm ${
-           !sourceFiles?.[0] || !targetFile || !mappingFile || !selectedLLM
+         className={`
+           w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 
+           transition-all text-sm uppercase tracking-wider
+           ${!sourceFiles?.[0] || !targetFile || !mappingFile || !selectedLLM
              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
              : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-         }`}
+           }
+         `}
        >
-         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
          </svg>
          Generate Code
