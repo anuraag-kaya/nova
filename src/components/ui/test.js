@@ -15,50 +15,39 @@
            <p className="text-sm text-gray-600">Generate COBOL with gen AI prompt and file uploads</p>
          </div>
        </div>
+       
+       {/* Quick Start Guide - Moved here */}
+       <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+         <h3 className="text-sm font-bold text-gray-900 mb-2">Quick Start Guide</h3>
+         <ol className="text-xs text-gray-700 space-y-1.5">
+           <li className="flex items-start">
+             <span className="font-semibold text-indigo-600 mr-2">1.</span>
+             Upload source copybook files (1-3 files)
+           </li>
+           <li className="flex items-start">
+             <span className="font-semibold text-indigo-600 mr-2">2.</span>
+             Add target copybook file
+           </li>
+           <li className="flex items-start">
+             <span className="font-semibold text-indigo-600 mr-2">3.</span>
+             Include mapping rules configuration
+           </li>
+           <li className="flex items-start">
+             <span className="font-semibold text-indigo-600 mr-2">4.</span>
+             Select LLM and add instructions
+           </li>
+           <li className="flex items-start">
+             <span className="font-semibold text-indigo-600 mr-2">5.</span>
+             Generate your COBOL code
+           </li>
+         </ol>
+       </div>
      </div>
    </div>
 
    {/* Code Display Area */}
    <div className="flex-1 overflow-hidden flex flex-col bg-white">
      <div className="flex-1 overflow-y-auto p-6">
-       {!loading && !generatedCode && (
-         /* Quick Start Guide */
-         <div className="h-full flex items-center justify-center">
-           <div className="text-center max-w-md">
-             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full mb-4">
-               <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-               </svg>
-             </div>
-             <h3 className="text-xl font-bold text-gray-900 mb-3">Quick Start Guide</h3>
-             <div className="text-left bg-gray-50 rounded-xl p-4 border border-gray-100">
-               <ol className="text-sm text-gray-700 space-y-2">
-                 <li className="flex items-start">
-                   <span className="font-semibold text-indigo-600 mr-2">1.</span>
-                   Upload source copybook files (1-3 files)
-                 </li>
-                 <li className="flex items-start">
-                   <span className="font-semibold text-indigo-600 mr-2">2.</span>
-                   Add target copybook file
-                 </li>
-                 <li className="flex items-start">
-                   <span className="font-semibold text-indigo-600 mr-2">3.</span>
-                   Include mapping rules configuration
-                 </li>
-                 <li className="flex items-start">
-                   <span className="font-semibold text-indigo-600 mr-2">4.</span>
-                   Select LLM and add instructions
-                 </li>
-                 <li className="flex items-start">
-                   <span className="font-semibold text-indigo-600 mr-2">5.</span>
-                   Generate your COBOL code
-                 </li>
-               </ol>
-             </div>
-           </div>
-         </div>
-       )}
-
        {loading && (
          <div className="h-full flex items-center justify-center">
            <div className="text-center">
@@ -110,6 +99,15 @@
            </div>
          </div>
        )}
+
+       {!loading && !generatedCode && (
+         <div className="h-full flex items-center justify-center">
+           <div className="text-center text-gray-500">
+             <p className="text-lg">Your generated code will appear here</p>
+             <p className="text-sm mt-2">Follow the quick start guide above to begin</p>
+           </div>
+         </div>
+       )}
      </div>
    </div>
  </div>
@@ -137,7 +135,7 @@
            {/* Source Files - Horizontal strip */}
            <div className="mb-2.5">
              <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1.5 block">
-               Source Copybooks
+               Source Copybooks (1-3 files)
              </label>
              <div className="flex gap-1.5">
                {[0, 1, 2].map((index) => (
@@ -166,7 +164,9 @@
                        transition-all text-center
                        ${sourceFiles?.[index] 
                          ? 'border-green-500 bg-green-50' 
-                         : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
+                         : index === 0 
+                           ? 'border-red-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
+                           : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
                        }
                      `}>
                        {sourceFiles?.[index] ? (
@@ -184,7 +184,7 @@
                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                            </svg>
                            <span className="text-[9px] text-gray-500">
-                             File {index + 1}
+                             File {index + 1} {index === 0 && '*'}
                            </span>
                          </div>
                        )}
@@ -200,7 +200,7 @@
              {/* Target File */}
              <div className="flex-1">
                <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1.5 block">
-                 Target Copybook
+                 Target Copybook *
                </label>
                <input 
                  type="file" 
@@ -215,7 +215,7 @@
                    transition-all
                    ${targetFile 
                      ? 'border-green-500 bg-green-50' 
-                     : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
+                     : 'border-red-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
                    }
                  `}>
                    {targetFile ? (
@@ -242,7 +242,7 @@
              {/* Mapping File */}
              <div className="flex-1">
                <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1.5 block">
-                 Mapping Rules
+                 Mapping Rules *
                </label>
                <input 
                  type="file" 
@@ -257,7 +257,7 @@
                    transition-all
                    ${mappingFile 
                      ? 'border-green-500 bg-green-50' 
-                     : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
+                     : 'border-red-300 hover:border-indigo-400 hover:bg-indigo-50 bg-white'
                    }
                  `}>
                    {mappingFile ? (
@@ -287,17 +287,18 @@
          <div className="flex gap-2">
            <div className="flex-1">
              <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1 block">
-               LLM Model
+               LLM Model *
              </label>
              <select
                value={selectedLLM}
                onChange={(e) => setSelectedLLM(e.target.value)}
                className="w-full px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
              >
-               <option value="">Select...</option>
-               {llmModels.map(model => (
-                 <option key={model.id} value={model.id}>{model.name}</option>
-               ))}
+               <option value="">Select Model...</option>
+               <option value="1">Gemini 2.0 Flash</option>
+               <option value="2">Gemini 2.0 Flash-lite</option>
+               <option value="3">Gemini 1.5 Flash</option>
+               <option value="4">Gemini 1.5 Pro</option>
              </select>
            </div>
 
@@ -320,7 +321,7 @@
            </button>
          </div>
 
-         {/* Instructions - Large expandable area */}
+         {/* Instructions - Auto-expanding textarea with pre-populated prompt */}
          <div className="mt-4">
            <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-2 block">
              Instructions / Prompt
@@ -329,24 +330,25 @@
              </span>
            </label>
            <textarea
-             placeholder={`Enter your detailed instructions here. This is where you can provide comprehensive requirements for your COBOL code generation:
-
-• Specific business logic requirements
-• Data transformation rules
-• Error handling preferences
-• Naming conventions to follow
-• Performance considerations
-• Security requirements
-• Integration points
-• Testing scenarios
-• Documentation standards
-• Any other specific instructions...
-
-The more detailed your instructions, the better the generated code will match your requirements.`}
-             className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm leading-relaxed"
+             placeholder="Enter additional instructions..."
+             className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm leading-relaxed"
              style={{ minHeight: '400px' }}
              value={promptText}
-             onChange={(e) => setPromptText(e.target.value)}
+             onChange={(e) => {
+               setPromptText(e.target.value);
+               // Auto-resize the textarea
+               e.target.style.height = 'auto';
+               e.target.style.height = e.target.scrollHeight + 'px';
+             }}
+             onInput={(e) => {
+               // Also handle onInput for better responsiveness
+               e.target.style.height = 'auto';
+               e.target.style.height = e.target.scrollHeight + 'px';
+             }}
+             defaultValue={`[YOUR PROMPT WILL GO HERE - REPLACE THIS TEXT WITH YOUR ACTUAL PROMPT]
+
+Additional instructions can be added below:
+`}
            />
            <div className="flex justify-between items-center mt-2">
              <p className="text-[10px] text-gray-500">
@@ -362,3 +364,62 @@ The more detailed your instructions, the better the generated code will match yo
    </div>
  </div>
 </div>
+
+{/* Add this in your component's JavaScript section */}
+{/* 
+const handleGenerateCode = async () => {
+ if (!sourceFiles?.[0] || !targetFile || !mappingFile || !selectedLLM) {
+   return;
+ }
+
+ setLoading(true);
+ 
+ try {
+   const formData = new FormData();
+   
+   // Add source files (1-3 files)
+   sourceFiles.forEach((file, index) => {
+     if (file) {
+       formData.append('source_copybooks', file);
+     }
+   });
+   
+   // Add other required files
+   formData.append('target_copybook', targetFile);
+   formData.append('mapping_rules', mappingFile);
+   formData.append('prompt', promptText);
+   formData.append('llm_model_id', selectedLLM);
+   
+   const response = await fetch('/generate-code', {
+     method: 'POST',
+     body: formData,
+   });
+   
+   if (response.ok) {
+     const data = await response.json();
+     setGeneratedCode(data.generated_code);
+   } else {
+     console.error('Failed to generate code');
+   }
+ } catch (error) {
+   console.error('Error generating code:', error);
+ } finally {
+   setLoading(false);
+ }
+};
+
+// Initialize state with pre-populated prompt
+const [promptText, setPromptText] = useState(`[YOUR PROMPT WILL GO HERE - REPLACE THIS TEXT WITH YOUR ACTUAL PROMPT]
+
+Additional instructions can be added below:
+`);
+
+// useEffect to auto-resize textarea on mount
+useEffect(() => {
+ const textarea = document.querySelector('textarea');
+ if (textarea && promptText) {
+   textarea.style.height = 'auto';
+   textarea.style.height = textarea.scrollHeight + 'px';
+ }
+}, [promptText]);
+*/}
