@@ -1,4 +1,4 @@
-// In studio/page.js, add this function after your other handler functions:
+// In studio/page.js, here's the updated handleRefresh function:
 
 const handleRefresh = async () => {
   // Only proceed if we're on test case view
@@ -37,32 +37,45 @@ const handleRefresh = async () => {
     }
 
     if (foundProject && foundRelease) {
-      projectKey = foundProject.project_name || 'NAM-KM'; // Use project name or default
-      fixVersionName = foundRelease.version || 'NAM 2025 R02 02/11-02/17'; // Use version or default
+      // Use the actual project name/key from your data structure
+      // Adjust these based on your actual data structure
+      projectKey = foundProject.project_key || foundProject.project_name || 'NAM-KM';
+      fixVersionName = foundRelease.version || foundRelease.name || 'NAM 2025 R02 02/11-02/17';
     } else {
       console.warn('Could not find project/release info, using defaults');
       projectKey = 'NAM-KM';
       fixVersionName = 'NAM 2025 R02 02/11-02/17';
     }
 
-    console.log('Calling sync API with:', { projectKey, fixVersionName });
+    console.log('Sync API parameters:', { projectKey, fixVersionName });
+
+    // Build the URL with query parameters
+    const baseUrl = 'http://127.0.0.1:8000/sync/sync_jira_and_zephyr_release';
+    const params = new URLSearchParams({
+      fix_version_name: fixVersionName,
+      project_key: projectKey
+    });
+    
+    const fullUrl = `${baseUrl}?${params.toString()}`;
+    console.log('Calling sync API:', fullUrl);
 
     // Call the sync API
-    const response = await fetch(
-      `http://127.0.0.1:8000/sync/sync_jira_and_zephyr_release?fix_version_name=${encodeURIComponent(fixVersionName)}&project_key=${encodeURIComponent(projectKey)}`,
-      {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        }
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       }
-    );
+    });
+
+    // Check if response is ok before parsing
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
 
     const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.detail || 'Failed to sync');
-    }
+    console.log('Sync API response:', data);
 
     // Check for success status
     if (data.sync_up_status === 'success') {
@@ -81,11 +94,14 @@ const handleRefresh = async () => {
       });
       setLastRefreshTime(timeString);
       
+      // Save to localStorage for persistence
+      localStorage.setItem('lastTestCaseRefreshTime', timeString);
+      
       // Show success notification
       if (addNotification) {
         addNotification({
           title: "Sync Successful",
-          message: "Jira and Zephyr data synced successfully. Test cases refreshed.",
+          message: `Jira and Zephyr data synced successfully for ${fixVersionName}. Test cases refreshed.`,
           type: "success"
         });
       }
