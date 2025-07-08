@@ -1,67 +1,143 @@
-// OPTION 1: With a refresh icon (clock icon)
-{lastRefreshTime && (
-  <div className="flex items-center text-xs text-gray-500">
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      className="h-3.5 w-3.5 mr-1 text-gray-400" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      stroke="currentColor"
-    >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        strokeWidth={2} 
-        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" 
-      />
-    </svg>
-    <span className="text-gray-600">Last synced: </span>
-    <span className="ml-1 font-medium text-gray-700">{lastRefreshTime}</span>
-  </div>
-)}
+// In studio/page.js, update your handleRefresh function:
 
-// OPTION 2: With a sync/refresh icon
-{lastRefreshTime && (
-  <div className="flex items-center text-xs text-gray-500">
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      className="h-3.5 w-3.5 mr-1 text-gray-400" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      stroke="currentColor"
-    >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        strokeWidth={2} 
-        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.001 0 01-15.357-2m15.357 2H15" 
-      />
-    </svg>
-    <span>Synced {lastRefreshTime}</span>
-  </div>
-)}
+const handleRefresh = async () => {
+  // Check if we're on either test case or user story view
+  if ((activeView !== 'testCase' && activeView !== 'userStory') || !accessToken) {
+    console.log('Cannot refresh: not on appropriate view or missing data');
+    return;
+  }
 
-// OPTION 3: Minimal with subtle background
-{lastRefreshTime && (
-  <div className="flex items-center text-xs bg-gray-50 px-2 py-1 rounded-md">
-    <span className="text-gray-500">Synced</span>
-    <span className="ml-1 text-gray-700 font-medium">{lastRefreshTime}</span>
-  </div>
-)}
+  setIsRefreshing(true);
 
-// OPTION 4: With a badge style
-{lastRefreshTime && (
-  <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-    <svg className="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-    </svg>
-    Synced {lastRefreshTime}
-  </div>
-)}
+  try {
+    let projectKey = '';
+    let fixVersionName = '';
 
-// OPTION 5: Super minimal
-{lastRefreshTime && (
-  <span className="text-xs text-gray-400">
-    Updated {lastRefreshTime}
-  </span>
-)}
+    // Handle based on active view
+    if (activeView === 'testCase' && selectedUserStory) {
+      // TEST CASE VIEW - Extract from user story
+      const userStoryIdParts = selectedUserStory.id.split('-');
+      const releaseId = userStoryIdParts[1];
+
+      // Find the release and project from projectsData
+      for (const project of projectsData) {
+        if (project.releases) {
+          const release = project.releases.find(r => 
+            r.release_id.toString() === releaseId
+          );
+          if (release) {
+            projectKey = project.project_key || project.project_name || 'NAM-KM';
+            fixVersionName = release.version || release.name || 'NAM 2025 R02 02/11-02/17';
+            break;
+          }
+        }
+      }
+    } else if (activeView === 'userStory' && selectedRelease) {
+      // USER STORY VIEW - Extract from release
+      const releaseId = selectedRelease.id.replace('rel-', '');
+      
+      // Find the project that contains this release
+      for (const project of projectsData) {
+        if (project.releases) {
+          const release = project.releases.find(r => 
+            r.release_id.toString() === releaseId
+          );
+          if (release) {
+            projectKey = project.project_key || project.project_name || 'NAM-KM';
+            fixVersionName = release.version || release.name || 'NAM 2025 R02 02/11-02/17';
+            break;
+          }
+        }
+      }
+    }
+
+    if (!projectKey || !fixVersionName) {
+      console.warn('Could not find project/release info, using defaults');
+      projectKey = 'NAM-KM';
+      fixVersionName = 'NAM 2025 R02 02/11-02/17';
+    }
+
+    console.log('Sync API parameters:', { projectKey, fixVersionName, activeView });
+
+    // Build the URL with query parameters
+    const baseUrl = 'http://127.0.0.1:8000/sync/sync_jira_and_zephyr_release';
+    const params = new URLSearchParams({
+      fix_version_name: fixVersionName,
+      project_key: projectKey
+    });
+    
+    const fullUrl = `${baseUrl}?${params.toString()}`;
+    console.log('Calling sync API:', fullUrl);
+
+    // Call the sync API
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
+    });
+
+    // Check if response is ok before parsing
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Sync API response:', data);
+
+    // Check for success status
+    if (data.sync_up_status === 'success') {
+      console.log('Sync successful!');
+      
+      // Refresh the appropriate table based on view
+      if (activeView === 'testCase') {
+        // Refresh test cases table
+        triggerTestCasesRefresh();
+      } else if (activeView === 'userStory') {
+        // Refresh user stories table
+        setUserStoriesRefreshTrigger(prev => prev + 1);
+      }
+      
+      // Update timestamp
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      setLastRefreshTime(timeString);
+      
+      // Save to localStorage for persistence
+      localStorage.setItem('lastTestCaseRefreshTime', timeString);
+      
+      // Show success notification
+      if (addNotification) {
+        addNotification({
+          title: "Sync Successful",
+          message: `Jira and Zephyr data synced successfully for ${fixVersionName}. ${
+            activeView === 'testCase' ? 'Test cases' : 'User stories'
+          } refreshed.`,
+          type: "success"
+        });
+      }
+    } else {
+      throw new Error('Sync returned non-success status');
+    }
+
+  } catch (error) {
+    console.error('Refresh error:', error);
+    
+    // Show error notification
+    if (addNotification) {
+      addNotification({
+        title: "Sync Failed",
+        message: error.message || "Failed to sync Jira and Zephyr data",
+        type: "error"
+      });
+    }
+  } finally {
+    setIsRefreshing(false);
+  }
+};
