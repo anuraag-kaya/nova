@@ -12,26 +12,25 @@
         <div>
           <h4 className="text-sm font-medium text-gray-800">
             {(() => {
-              // Extract project info from the first selected user story
               const firstStory = selectedUserStories[0];
-              if (!firstStory) return "Unknown Project";
+              if (!firstStory || !firstStory.id) return "Unknown Project";
               
-              // User story IDs are in format: "us-releaseId-userStoryId"
+              // Extract release ID from user story ID (format: "us-releaseId-userStoryId")
               const idParts = firstStory.id.split('-');
-              const releaseId = idParts.length > 2 ? idParts[1] : null;
+              const releaseId = idParts[1]; // Get the release ID part
               
               // Find the project that contains this release
               let projectName = "Unknown Project";
-              if (releaseId && projectsData.length > 0) {
-                for (const project of projectsData) {
-                  if (project.releases) {
-                    const hasRelease = project.releases.some(r => 
-                      r.release_id === parseInt(releaseId)
-                    );
-                    if (hasRelease) {
-                      projectName = project.project_name || project.name;
-                      break;
-                    }
+              
+              for (const project of projectsData) {
+                if (project.releases && Array.isArray(project.releases)) {
+                  const hasRelease = project.releases.some(release => 
+                    release.release_id?.toString() === releaseId
+                  );
+                  
+                  if (hasRelease) {
+                    projectName = project.project_name || project.name || `Project ${project.project_id}`;
+                    break;
                   }
                 }
               }
@@ -45,7 +44,7 @@
         </div>
       </div>
     </div>
-  ) : isRegenerateMode ? (
+  ) : isRegenerateMode && selectedTestCases && selectedTestCases.length > 0 ? (
     <div className="p-4 text-sm text-gray-500 border border-gray-200 bg-gray-50 rounded-md">
       Project information not available in regenerate mode
     </div>
