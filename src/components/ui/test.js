@@ -1,227 +1,172 @@
-// 1. Import statements you'll need
-import { useState, useEffect, useMemo } from "react";
+<div className="relative">
+  <button
+    onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+    className="w-full px-6 py-4 bg-white rounded-2xl shadow-sm border border-gray-200 flex items-center justify-between hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#0057e7] focus:ring-offset-2"
+  >
+    <span className="text-gray-900 font-medium">
+      {selectedProjectKey ? `Project: ${selectedProjectKey}` : 'Select Project Key'}
+    </span>
+    <svg
+      className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${showProjectDropdown ? 'rotate-180' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
 
-// 2. Inside your component, add these state variables
-const [searchQuery, setSearchQuery] = useState("");
-const [testData, setTestData] = useState([]); // Your tree data
-const [expandedItems, setExpandedItems] = useState(new Set());
-
-// 3. The complete search bar JSX component
-const SearchBar = () => (
-  <div className="p-2 flex-shrink-0">
-    <input
-      type="text"
-      placeholder="Search test cases..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="w-full p-2 text-sm rounded border focus:outline-none focus:ring-2 focus:ring-[#0057e7] bg-gray-100 text-gray-900 border-gray-300"
-    />
-  </div>
-);
-
-// 4. The complete filtering function
-const filterTestData = (data, query) => {
-  if (!query) return data; // Return full data if query is empty
-
-  const lowerCaseQuery = query.toLowerCase().trim();
-  
-  // First identify all matches by their IDs
-  const matchingIds = new Set();
-  const parentMap = new Map(); // Map to store child->parent relationships
-  
-  // Function to check if a node matches and collect its ID and parent relationships
-  const collectMatches = (node, parentId = null) => {
-    // Store parent relationship
-    if (parentId) {
-      parentMap.set(node.id, parentId);
-    }
-    
-    // Check if current node matches
-    const nodeMatches = node.name.toLowerCase().includes(lowerCaseQuery);
-    if (nodeMatches) {
-      matchingIds.add(node.id);
-    }
-    
-    // Process children
-    if (node.children) {
-      node.children.forEach(child => {
-        collectMatches(child, node.id);
-      });
-    }
-    
-    return nodeMatches;
-  };
-  
-  // First pass: collect all matching nodes and build parent relationships
-  data.forEach(node => collectMatches(node));
-  
-  // Add all ancestors of matching nodes to the matching set
-  const addAncestors = (id) => {
-    const parentId = parentMap.get(id);
-    if (parentId) {
-      matchingIds.add(parentId);
-      addAncestors(parentId);
-    }
-  };
-  
-  // Add ancestors for all matching nodes
-  Array.from(matchingIds).forEach(id => {
-    addAncestors(id);
-  });
-  
-  // Function to create a filtered tree structure
-  const filterTreeByIds = (node) => {
-    // If this node isn't in our matching set, filter it out
-    if (!matchingIds.has(node.id)) {
-      return null;
-    }
-    
-    // Include this node, but filter its children
-    const filteredNode = { ...node };
-    
-    if (node.children) {
-      const filteredChildren = node.children
-        .map(filterTreeByIds)
-        .filter(Boolean); // Remove null entries
-      
-      filteredNode.children = filteredChildren;
-    }
-    
-    return filteredNode;
-  };
-  
-  // Final filtered tree
-  const filteredData = data
-    .map(filterTreeByIds)
-    .filter(Boolean); // Remove null entries
-  
-  return filteredData;
-};
-
-// 5. Memoize filtered data
-const filteredData = useMemo(() => 
-  filterTestData(testData, searchQuery), 
-  [testData, searchQuery]
-);
-
-// 6. Helper function to get all IDs for expansion
-function getAllItemIds(nodes) {
-  let ids = [];
-  const collectIds = (items) => {
-    if (!Array.isArray(items)) return; // Ensure items is an array
-    items.forEach(item => {
-      ids.push(item.id);
-      if (item.children && item.children.length > 0) {
-        collectIds(item.children);
-      }
-    });
-  };
-  collectIds(nodes);
-  return ids;
-}
-
-// 7. Auto-expand all items when searching
-useEffect(() => {
-  if (searchQuery) {
-    // Always expand all items when searching
-    const allItemIds = getAllItemIds(filteredData);
-    setExpandedItems(new Set(allItemIds));
-  }
-}, [searchQuery, filteredData]);
-
-// 8. Function to highlight search text in results
-const highlightText = (text, searchTerm) => {
-  if (!searchTerm) return text;
-  
-  try {
-    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
-    
-    return (
-      <>
-        {parts.map((part, index) => 
-          part.toLowerCase() === searchTerm.toLowerCase() 
-            ? <span key={index} className="bg-yellow-200 text-gray-900 font-semibold">{part}</span> 
-            : <span key={index}>{part}</span>
-        )}
-      </>
-    );
-  } catch (e) {
-    return text;
-  }
-};
-
-// 9. Example usage in your render method
-return (
-  <div className="h-full w-full overflow-hidden bg-white">
-    <div className="h-full overflow-hidden flex flex-col">
+  {showProjectDropdown && (
+    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
       {/* Search Bar */}
-      <SearchBar />
-      
-      {/* Results */}
-      <div className="overflow-y-auto overflow-x-hidden flex-grow">
-        {searchQuery && filteredData.length === 0 ? (
-          <div className="px-2 py-1 text-[13px] text-gray-500">
-            No results found for "{searchQuery}"
+      <div className="p-3 border-b border-gray-100">
+        <div className="relative">
+          <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={projectSearchTerm}
+            onChange={(e) => setProjectSearchTerm(e.target.value)}
+            placeholder="Search projects..."
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0057e7] focus:bg-white transition-all duration-200"
+            autoFocus
+          />
+        </div>
+      </div>
+
+      {/* Projects List */}
+      <div className="max-h-64 overflow-y-auto">
+        {isLoadingProjects ? (
+          <div className="px-4 py-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#0057e7] mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading projects...</p>
           </div>
-        ) : filteredData.length === 0 ? (
-          <div className="px-2 py-1 text-[13px] text-gray-500">
-            No test cases available
-          </div>
-        ) : (
-          <div className="py-1">
-            {filteredData.map(node => (
-              <div key={node.id} className="p-2">
-                {/* Use highlightText when rendering node names */}
-                <span>{highlightText(node.name, searchQuery)}</span>
+        ) : filteredProjects.length > 0 ? (
+          filteredProjects.map((project) => (
+            <button
+              key={project.project_key}
+              onClick={() => handleSelectProject(project.project_key)}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-150 flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-[#0057e7]/10 rounded-full flex items-center justify-center">
+                  <span className="text-[#0057e7] text-sm font-semibold">
+                    {project.project_key.substring(0, 2).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-gray-900 font-medium">{project.project_key}</p>
+                  {project.project_name && (
+                    <p className="text-xs text-gray-500">{project.project_name}</p>
+                  )}
+                </div>
               </div>
-            ))}
+              {selectedProjectKey === project.project_key && (
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[#0057e7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))
+        ) : (
+          <div className="px-4 py-8 text-center text-gray-500">
+            {projectSearchTerm ? 'No projects found' : 'No projects available'}
           </div>
         )}
       </div>
+
+      {/* Add New Project */}
+      <div className="border-t border-gray-100 p-2">
+        <button
+          onClick={handleAddNewProject}
+          className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-150 flex items-center gap-3 group"
+        >
+          <div className="w-8 h-8 bg-[#0057e7] rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <span className="text-gray-900 font-medium">Add new project</span>
+        </button>
+      </div>
     </div>
-  </div>
+  )}
+</div>
+
+// Add these state variables
+const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+const [projectSearchTerm, setProjectSearchTerm] = useState('');
+const [selectedProjectKey, setSelectedProjectKey] = useState('');
+const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+const [projects, setProjects] = useState([]);
+
+// Add ref for click outside handling
+const projectDropdownRef = useRef(null);
+
+// Filter projects based on search
+const filteredProjects = projects.filter(project =>
+  project.project_key.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+  (project.project_name && project.project_name.toLowerCase().includes(projectSearchTerm.toLowerCase()))
 );
 
-// 10. Example tree data structure for testing
-const exampleTestData = [
-  {
-    id: 'proj-1',
-    name: 'Project Alpha',
-    children: [
-      {
-        id: 'rel-1',
-        name: 'Release 1.0',
-        children: [
-          {
-            id: 'us-1',
-            name: 'User Story Login',
-            children: []
-          },
-          {
-            id: 'us-2',
-            name: 'User Story Dashboard',
-            children: []
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'proj-2',
-    name: 'Project Beta',
-    children: [
-      {
-        id: 'rel-2',
-        name: 'Release 2.0',
-        children: [
-          {
-            id: 'us-3',
-            name: 'User Story Reports',
-            children: []
-          }
-        ]
-      }
-    ]
+// Handle project selection
+const handleSelectProject = (projectKey) => {
+  setSelectedProjectKey(projectKey);
+  setShowProjectDropdown(false);
+  setProjectSearchTerm('');
+  // You can add additional logic here to handle the selection
+};
+
+// Handle add new project
+const handleAddNewProject = () => {
+  setShowProjectDropdown(false);
+  // Implement your add project logic here
+  // You might want to open a modal or navigate to a form
+};
+
+// Add click outside handler
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target)) {
+      setShowProjectDropdown(false);
+    }
+  };
+
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, []);
+
+// Fetch projects when dropdown opens
+useEffect(() => {
+  if (showProjectDropdown && projects.length === 0) {
+    fetchProjects();
   }
-];
+}, [showProjectDropdown]);
+
+// Fetch projects function (using your API)
+const fetchProjects = async () => {
+  setIsLoadingProjects(true);
+  try {
+    // Replace with your actual API call
+    const response = await fetch('/api/get-page-objects', {
+      method: 'GET',
+      headers: {
+        'x-user-soeid': 'your-user-id', // Add appropriate headers
+      },
+    });
+    const data = await response.json();
+    // Assuming the API returns projects in the format you need
+    setProjects(data.page_objects || []);
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+  } finally {
+    setIsLoadingProjects(false);
+  }
+};
+
+
+
+<div ref={projectDropdownRef} className="relative">
+  {/* The dropdown code goes here */}
+</div>
