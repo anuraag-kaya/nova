@@ -1,9 +1,14 @@
+// First, add a state for selected project (similar to selectedUserStories)
+const [selectedProject, setSelectedProject] = useState(null);
+
+// In your UserPromptForm component, add this to fetch the selected project
+// This goes where you're already using selectedUserStories
 <div className="mb-4">
   <label className="text-sm font-medium text-gray-700 block mb-2">
     Selected Project:
   </label>
   <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-    {selectedProjectKey ? (
+    {selectedProject ? (
       <div className="p-3 bg-gray-50">
         <div className="flex items-start">
           <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#0057e7]/10 text-[#0057e7] text-xs mr-2 flex-shrink-0">
@@ -12,16 +17,16 @@
             </svg>
           </span>
           <div>
-            <h4 className="text-sm font-medium text-gray-800">{selectedProjectKey}</h4>
-            {selectedProjectName && (
-              <p className="text-xs text-gray-500 mt-1">{selectedProjectName}</p>
+            <h4 className="text-sm font-medium text-gray-800">{selectedProject.name}</h4>
+            {selectedProject.description && (
+              <p className="text-xs text-gray-500 mt-1">{selectedProject.description}</p>
             )}
           </div>
         </div>
       </div>
     ) : (
-      <div className="p-4 text-sm text-gray-500 text-center">
-        No project selected
+      <div className="p-4 text-sm text-red-500 border border-red-200 bg-red-50 rounded-md">
+        Please select a project to continue.
       </div>
     )}
   </div>
