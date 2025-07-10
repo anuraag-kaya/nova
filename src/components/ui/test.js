@@ -1,139 +1,3 @@
-// app/api/get-page-object/route.js
-const API_BASE_URL = process.env.API_BASE_URL;
-
-export async function GET(request) {
-  const headers = request.headers;
-  const authHeader = headers.get("authorization");
-  
-  // Get project_id from query parameters
-  const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("project_id");
-
-  if (!authHeader) {
-    return new Response(
-      JSON.stringify({ error: "Missing Authorization header" }),
-      { status: 400 }
-    );
-  }
-
-  if (!projectId) {
-    return new Response(
-      JSON.stringify({ error: "Missing project_id parameter" }),
-      { status: 400 }
-    );
-  }
-
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/get-page-object?project_id=${projectId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: authHeader,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      return new Response(
-        JSON.stringify({ error: "Bad response from FastAPI" }),
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching page objects:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to fetch page objects." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-}
-
-// ***************************************************************************************************************************************
-
-// app/api/add-page-object/route.js
-const API_BASE_URL = process.env.API_BASE_URL;
-
-export async function POST(request) {
-  const headers = request.headers;
-  const authHeader = headers.get("authorization");
-
-  if (!authHeader) {
-    return new Response(
-      JSON.stringify({ error: "Missing Authorization header" }),
-      { status: 400 }
-    );
-  }
-
-  try {
-    // Parse the request body
-    const body = await request.json();
-    const { project_id, project_key, page_object_files } = body;
-
-    // Validate required fields
-    if (!project_id || !project_key || !page_object_files || !Array.isArray(page_object_files)) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Missing required fields: project_id, project_key, or page_object_files" 
-        }),
-        { status: 400 }
-      );
-    }
-
-    // Make the API call to add page objects
-    const response = await fetch(
-      `${API_BASE_URL}/add-page-object`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: authHeader,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          project_id,
-          project_key,
-          page_object_files
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return new Response(
-        JSON.stringify({ error: "Failed to add page objects", details: errorText }),
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-  } catch (error) {
-    console.error("Error adding page objects:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to add page objects.", message: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-}
-
-// ***************************************************************************************************************************************
-
 // components/PageObjectDropdown.js
 "use client";
 import { useState, useEffect, useRef } from "react";
@@ -188,7 +52,6 @@ export default function PageObjectDropdown({
           method: "GET",
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            "x-user-email": userEmail,
             "Content-Type": "application/json",
           },
         }
@@ -200,19 +63,18 @@ export default function PageObjectDropdown({
 
       const data = await response.json();
       
-      // Extract page objects from the response structure
-      // The API returns { "page_objects": { "project_key": [...] } }
+      // Parse the response - API returns {"page_objects": {"project_key": ["file1.json", "file2.json"]}}
       let allPageObjects = [];
-      if (data.page_objects) {
-        Object.entries(data.page_objects).forEach(([projectKey, objects]) => {
-          if (Array.isArray(objects)) {
-            allPageObjects = allPageObjects.concat(
-              objects.map(obj => ({
-                id: obj.page_object_id || obj.id || obj,
-                name: obj.page_object_name || obj.name || obj,
+      if (data.page_objects && typeof data.page_objects === 'object') {
+        Object.entries(data.page_objects).forEach(([projectKey, files]) => {
+          if (Array.isArray(files)) {
+            files.forEach((filename, index) => {
+              allPageObjects.push({
+                id: `${projectKey}_${filename}`,
+                name: filename,
                 projectKey: projectKey
-              }))
-            );
+              });
+            });
           }
         });
       }
@@ -241,13 +103,13 @@ export default function PageObjectDropdown({
   // Toggle selection of a page object
   const toggleSelection = (pageObject) => {
     const isSelected = selectedPageObjects.some(selected => 
-      selected.id === pageObject.id || selected.name === pageObject.name
+      selected.id === pageObject.id
     );
 
     let newSelection;
     if (isSelected) {
       newSelection = selectedPageObjects.filter(selected => 
-        selected.id !== pageObject.id && selected.name !== pageObject.name
+        selected.id !== pageObject.id
       );
     } else {
       newSelection = [...selectedPageObjects, pageObject];
@@ -259,7 +121,7 @@ export default function PageObjectDropdown({
   // Check if a page object is selected
   const isSelected = (pageObject) => {
     return selectedPageObjects.some(selected => 
-      selected.id === pageObject.id || selected.name === pageObject.name
+      selected.id === pageObject.id
     );
   };
 
@@ -359,7 +221,7 @@ export default function PageObjectDropdown({
               ) : filteredPageObjects.length > 0 ? (
                 filteredPageObjects.map((pageObject) => (
                   <button
-                    key={pageObject.id || pageObject.name}
+                    key={pageObject.id}
                     type="button"
                     onClick={() => toggleSelection(pageObject)}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
@@ -393,64 +255,3 @@ export default function PageObjectDropdown({
     </div>
   );
 }
-
-// ***************************************************************************************************************************************
-
-
-// Add these to your UserPromptForm.js
-
-// 1. Import the PageObjectDropdown component
-import PageObjectDropdown from "./PageObjectDropdown";
-
-// 2. Add state for selected page objects
-const [selectedPageObjects, setSelectedPageObjects] = useState([]);
-const [showAddPageObjectModal, setShowAddPageObjectModal] = useState(false);
-
-// 3. Get project ID from context (adjust based on your app structure)
-const getProjectId = () => {
-  // If in regenerate mode, get from test cases
-  if (isRegenerateMode && selectedTestCases.length > 0) {
-    // Extract project ID from test case context
-    // This depends on your data structure
-    return selectedTestCases[0].projectId || null;
-  }
-  
-  // If in generate mode, get from user stories
-  if (!isRegenerateMode && selectedUserStories.length > 0) {
-    // Extract project ID from user story
-    const storyId = selectedUserStories[0].id;
-    // Assuming ID format is "us-releaseId-storyId"
-    // You might need to fetch the project ID from the release
-    return selectedUserStories[0].projectId || null;
-  }
-  
-  return null;
-};
-
-const projectId = getProjectId();
-
-// 4. Add the dropdown in your form (after the prompt field)
-<div className="mb-4">
-  <PageObjectDropdown
-    projectId={projectId}
-    selectedPageObjects={selectedPageObjects}
-    onSelectionChange={setSelectedPageObjects}
-    accessToken={accessToken}
-    userEmail={user?.email}
-    disabled={(!isRegenerateMode && !hasSelectedStories) || (isRegenerateMode && !hasSelectedTestCases) || isGenerating}
-    onAddClick={() => setShowAddPageObjectModal(true)}
-  />
-</div>
-
-// 5. Include selected page objects in your API call
-const handleGenerateTestCases = async () => {
-  // ... existing code ...
-  
-  // Add page objects to the request body
-  const requestBody = {
-    userPrompt: promptText.trim() || "",
-    pageObjects: selectedPageObjects.map(po => po.name) // Send page object names
-  };
-  
-  // ... rest of your API call with the updated body
-};
