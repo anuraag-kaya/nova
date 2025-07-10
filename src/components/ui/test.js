@@ -18,6 +18,13 @@ export default function PageObjectDropdown({
   const [error, setError] = useState(null);
   const dropdownRef = useRef(null);
 
+  // Debug logging
+  useEffect(() => {
+    console.log("PageObjectDropdown - projectId:", projectId);
+    console.log("PageObjectDropdown - accessToken exists:", !!accessToken);
+    console.log("PageObjectDropdown - disabled:", disabled);
+  }, [projectId, accessToken, disabled]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -40,18 +47,24 @@ export default function PageObjectDropdown({
   }, [projectId, accessToken]);
 
   const fetchPageObjects = async () => {
-    if (!projectId || !accessToken) return;
+    if (!projectId || !accessToken) {
+      console.log("Cannot fetch: missing projectId or accessToken");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
+      console.log("Fetching page objects for project:", projectId);
+      
       const response = await fetch(
         `/api/get-page-object?project_id=${projectId}`,
         {
           method: "GET",
           headers: {
             Authorization: `Bearer ${accessToken}`,
+            "x-user-email": userEmail,
             "Content-Type": "application/json",
           },
         }
@@ -62,23 +75,26 @@ export default function PageObjectDropdown({
       }
 
       const data = await response.json();
+      console.log("Page objects response:", data);
       
-      // Parse the response - API returns {"page_objects": {"project_key": ["file1.json", "file2.json"]}}
+      // Extract page objects from the response structure
+      // The API returns { "page_objects": { "project_key": [...] } }
       let allPageObjects = [];
-      if (data.page_objects && typeof data.page_objects === 'object') {
-        Object.entries(data.page_objects).forEach(([projectKey, files]) => {
-          if (Array.isArray(files)) {
-            files.forEach((filename, index) => {
-              allPageObjects.push({
-                id: `${projectKey}_${filename}`,
-                name: filename,
+      if (data.page_objects) {
+        Object.entries(data.page_objects).forEach(([projectKey, objects]) => {
+          if (Array.isArray(objects)) {
+            allPageObjects = allPageObjects.concat(
+              objects.map(obj => ({
+                id: obj.page_object_id || obj.id || obj,
+                name: obj.page_object_name || obj.name || obj,
                 projectKey: projectKey
-              });
-            });
+              }))
+            );
           }
         });
       }
 
+      console.log("Processed page objects:", allPageObjects);
       setPageObjects(allPageObjects);
     } catch (err) {
       console.error("Error fetching page objects:", err);
@@ -103,13 +119,13 @@ export default function PageObjectDropdown({
   // Toggle selection of a page object
   const toggleSelection = (pageObject) => {
     const isSelected = selectedPageObjects.some(selected => 
-      selected.id === pageObject.id
+      selected.id === pageObject.id || selected.name === pageObject.name
     );
 
     let newSelection;
     if (isSelected) {
       newSelection = selectedPageObjects.filter(selected => 
-        selected.id !== pageObject.id
+        selected.id !== pageObject.id && selected.name !== pageObject.name
       );
     } else {
       newSelection = [...selectedPageObjects, pageObject];
@@ -121,7 +137,7 @@ export default function PageObjectDropdown({
   // Check if a page object is selected
   const isSelected = (pageObject) => {
     return selectedPageObjects.some(selected => 
-      selected.id === pageObject.id
+      selected.id === pageObject.id || selected.name === pageObject.name
     );
   };
 
@@ -171,7 +187,9 @@ export default function PageObjectDropdown({
           }`}
         >
           <span className="truncate">
-            {isLoading ? (
+            {!projectId ? (
+              "No project selected"
+            ) : isLoading ? (
               "Loading page objects..."
             ) : selectedPageObjects.length > 0 ? (
               `${selectedPageObjects.length} page object${selectedPageObjects.length > 1 ? 's' : ''} selected`
@@ -221,7 +239,7 @@ export default function PageObjectDropdown({
               ) : filteredPageObjects.length > 0 ? (
                 filteredPageObjects.map((pageObject) => (
                   <button
-                    key={pageObject.id}
+                    key={pageObject.id || pageObject.name}
                     type="button"
                     onClick={() => toggleSelection(pageObject)}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
@@ -252,6 +270,161 @@ export default function PageObjectDropdown({
           </div>
         )}
       </div>
+      
+      {/* Debug info - remove in production */}
+      {!projectId && (
+        <p className="text-xs text-red-500 mt-1">No project ID available</p>
+      )}
     </div>
   );
 }
+
+// ******************************************************************************************************************************
+
+// Integration code for UserPromptForm.js
+
+// 1. Import the PageObjectDropdown component
+import PageObjectDropdown from "./PageObjectDropdown";
+
+// 2. Add state for selected page objects and project data
+const [selectedPageObjects, setSelectedPageObjects] = useState([]);
+const [showAddPageObjectModal, setShowAddPageObjectModal] = useState(false);
+const [currentProjectId, setCurrentProjectId] = useState(null);
+
+// 3. Fetch project ID based on selected user stories
+useEffect(() => {
+  const fetchProjectId = async () => {
+    // For regenerate mode - extract from test cases if needed
+    if (isRegenerateMode && selectedTestCases.length > 0) {
+      // You might need to adjust this based on your data structure
+      // For now, we'll focus on the generate mode
+      return;
+    }
+    
+    // For generate mode - extract from user stories
+    if (!isRegenerateMode && selectedUserStories.length > 0) {
+      try {
+        // Extract the release ID from the first user story
+        const firstStory = selectedUserStories[0];
+        
+        // Parse the user story ID to get the release ID
+        // Assuming format: "us-releaseId-storyId"
+        const idParts = firstStory.id.split('-');
+        if (idParts.length >= 2) {
+          const releaseId = idParts[1];
+          
+          // Fetch the project data to get the project ID
+          const response = await fetch('/api/projects-with-releases', {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'x-user-email': user?.email,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            // Find the project that contains this release
+            for (const project of data.projects || []) {
+              const hasRelease = project.releases?.some(
+                release => release.release_id.toString() === releaseId
+              );
+              
+              if (hasRelease) {
+                console.log("Found project ID:", project.project_id);
+                setCurrentProjectId(project.project_id.toString());
+                break;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching project ID:", error);
+      }
+    }
+  };
+  
+  if (accessToken && user?.email) {
+    fetchProjectId();
+  }
+}, [selectedUserStories, selectedTestCases, isRegenerateMode, accessToken, user?.email]);
+
+// 4. Add the dropdown in your form (after the prompt field)
+<div className="mb-4">
+  <PageObjectDropdown
+    projectId={currentProjectId}
+    selectedPageObjects={selectedPageObjects}
+    onSelectionChange={setSelectedPageObjects}
+    accessToken={accessToken}
+    userEmail={user?.email}
+    disabled={(!isRegenerateMode && !hasSelectedStories) || (isRegenerateMode && !hasSelectedTestCases) || isGenerating || !currentProjectId}
+    onAddClick={() => setShowAddPageObjectModal(true)}
+  />
+</div>
+
+// 5. Update your generate test cases function to include page objects
+const handleGenerateTestCases = async () => {
+  // ... existing validation code ...
+  
+  try {
+    loader.showLoader();
+    let hasSuccessfulGeneration = false;
+    let successCount = 0;
+    let errorCount = 0;
+    
+    if (isRegenerateMode) {
+      // Regenerate mode logic
+      for (const testCaseId of itemIds) {
+        try {
+          const response = await fetch(`/api/regenerate-test-case/${testCaseId}/${llmModelId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-email": user?.email,
+              "Authorization": `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              userPrompt: promptText.trim() || "",
+              pageObjects: selectedPageObjects.map(po => po.name) // Include page objects
+            }),
+          });
+          
+          // ... rest of regenerate logic
+        } catch (error) {
+          // ... error handling
+        }
+      }
+    } else {
+      // Generate mode logic
+      for (const userStoryId of itemIds) {
+        try {
+          const response = await fetch(`/api/generate-test-cases/${userStoryId}/${llmModelId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-email": user?.email,
+              "Authorization": `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              userPrompt: promptText.trim() || "",
+              pageObjects: selectedPageObjects.map(po => po.name) // Include page objects
+            }),
+          });
+          
+          // ... rest of generate logic
+        } catch (error) {
+          // ... error handling
+        }
+      }
+    }
+    
+    // ... rest of the function
+  } catch (err) {
+    // ... error handling
+  } finally {
+    loader.hideLoader();
+    setIsGenerating(false);
+  }
+};
