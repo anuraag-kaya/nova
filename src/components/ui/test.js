@@ -62,15 +62,15 @@
               filteredPageObjects.map((pageObject, index) => (
                 <div
                   key={index}
-                  onClick={() => handlePageObjectToggle(pageObject, index)}
+                  onClick={() => handlePageObjectToggle(pageObject)}
                   className="flex items-center p-2 hover:bg-gray-50 cursor-pointer"
                 >
                   <div className="flex items-center justify-center w-4 h-4 mr-2 border rounded text-xs">
-                    {selectedPageObjects.some(selected => selected.index === index) && (
+                    {selectedPageObjects.some(selected => selected.page_object_name === pageObject.page_object_name) && (
                       <span className="text-[#0057e7] font-bold">✓</span>
                     )}
                   </div>
-                  <span className="text-sm text-gray-700">{pageObject}</span>
+                  <span className="text-sm text-gray-700">{pageObject.page_object_name}</span>
                 </div>
               ))
             )}
@@ -98,10 +98,10 @@
             key={index}
             className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
           >
-            {pageObject.value}
+            {pageObject.page_object_name}
             <button
               type="button"
-              onClick={() => handlePageObjectToggle(pageObject.value, pageObject.index)}
+              onClick={() => handlePageObjectToggle(pageObject)}
               className="ml-1 text-blue-600 hover:text-blue-800"
             >
               ×
@@ -138,32 +138,21 @@ useEffect(() => {
           }
         });
         
-        const responseText = await response.text();
-        console.log("Raw API Response:", responseText);
-        
         if (response.ok) {
-          try {
-            const data = JSON.parse(responseText);
-            console.log("Parsed API Data:", data);
-            
-            // Handle whatever structure the API returns
-            if (data.page_objects && Array.isArray(data.page_objects)) {
-              setPageObjects(data.page_objects);
-            } else if (Array.isArray(data)) {
-              setPageObjects(data);
-            } else {
-              console.log("Unexpected data structure:", data);
-              setPageObjects([]);
-            }
-          } catch (parseError) {
-            console.error("JSON Parse Error:", parseError);
-            setApiError("Invalid JSON response from server");
+          const data = await response.json();
+          console.log("API Response:", data);
+          
+          if (data.page_objects && Array.isArray(data.page_objects)) {
+            setPageObjects(data.page_objects);
+          } else {
+            console.log("No page_objects array found in response");
+            setPageObjects([]);
           }
         } else {
           setApiError(`Server error: ${response.status}`);
         }
       } catch (error) {
-        console.error("Network Error:", error);
+        console.error("Error fetching page objects:", error);
         setApiError(`Network error: ${error.message}`);
       } finally {
         setIsLoadingPageObjects(false);
@@ -174,19 +163,20 @@ useEffect(() => {
   fetchPageObjects();
 }, [isRegenerateMode, selectedUserStories]);
 
-// Filter page objects based on search query
+// Filter page objects based on search query (searching by page_object_name)
 const filteredPageObjects = pageObjects.filter(pageObject =>
-  String(pageObject).toLowerCase().includes(pageObjectSearchQuery.toLowerCase())
+  pageObject.page_object_name && 
+  pageObject.page_object_name.toLowerCase().includes(pageObjectSearchQuery.toLowerCase())
 );
 
 // Handle page object selection toggle
-const handlePageObjectToggle = (pageObject, index) => {
+const handlePageObjectToggle = (pageObject) => {
   setSelectedPageObjects(prev => {
-    const isSelected = prev.some(selected => selected.index === index);
+    const isSelected = prev.some(selected => selected.page_object_name === pageObject.page_object_name);
     if (isSelected) {
-      return prev.filter(selected => selected.index !== index);
+      return prev.filter(selected => selected.page_object_name !== pageObject.page_object_name);
     } else {
-      return [...prev, { value: pageObject, index: index }];
+      return [...prev, pageObject];
     }
   });
 };
