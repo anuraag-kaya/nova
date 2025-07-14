@@ -9,6 +9,7 @@ export default function TestCasesList({ testCases, onRowClick }) {
 
   const handleRadioChange = (row) => {
     setSelectedRowId(row.testcase_id);
+    // Keep the original functionality - radio selection opens another table
     onRowClick(row);
   };
 
@@ -42,8 +43,9 @@ export default function TestCasesList({ testCases, onRowClick }) {
       rowHeight={40}
       pageSizeOptions={[5, 10, 25, 100]}
       onRowClick={(params) => {
-        // Sync row click with radio selection
+        // Sync row click with radio selection - just highlight the row
         setSelectedRowId(params.row.testcase_id);
+        // Keep original functionality - row click also opens another table
         onRowClick(params.row);
       }}
       getRowClassName={(params) =>
