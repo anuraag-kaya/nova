@@ -13,18 +13,15 @@ export default function TestCasesList({ testCases, onRowClick }) {
   };
 
   const columns = [
-    { 
-      field: 'select', 
-      headerName: '', 
-      width: 60, 
-      renderCell: (params) => (
-        <input
-          type="radio"
-          checked={params.row.testcase_id === selectedRowId}
-          onChange={() => handleRadioChange(params.row)}
-        />
-      )
-    },
+    { field: 'select', headerName: '', width: 60, renderCell: (params) => (
+      <input
+        type="radio"
+        checked={params.row.testcase_id === selectedRowId}
+        onChange={() => {
+          handleRadioChange(params.row);
+        }}
+      />
+    )},
     { field: 'testcase_id', headerName: 'Test Case ID', width: 100 },
     {
       field: 'testcase_title',
@@ -45,8 +42,9 @@ export default function TestCasesList({ testCases, onRowClick }) {
       rowHeight={40}
       pageSizeOptions={[5, 10, 25, 100]}
       onRowClick={(params) => {
-        // Sync row click with radio button selection
-        handleRadioChange(params.row);
+        // Sync row click with radio selection
+        setSelectedRowId(params.row.testcase_id);
+        onRowClick(params.row);
       }}
       getRowClassName={(params) =>
         params.row.testcase_id === selectedRowId ? 'selected-row' : ''
