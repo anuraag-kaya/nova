@@ -1,16 +1,14 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useUser } from "@auth0/nextjs-auth0/client";
 
 export default function FeedbackWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [rating, setRating] = useState(null); // 'up' or 'down'
+  const [rating, setRating] = useState(null); // 'good' or 'bad'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const widgetRef = useRef(null);
-  const { user } = useUser();
 
   // Close widget when clicking outside
   useEffect(() => {
@@ -38,9 +36,6 @@ export default function FeedbackWidget() {
     setIsSubmitting(true);
 
     try {
-      // Map rating to API expected values
-      const feedbackType = rating === 'up' ? 'good' : 'bad';
-      
       // Call the feedback API
       const response = await fetch('/api/feedback', {
         method: 'POST',
@@ -48,11 +43,8 @@ export default function FeedbackWidget() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          feedback_type: feedbackType,
-          feedback: feedback.trim() || null, // Send null if no feedback text
-          user_email: user?.email || 'anonymous',
-          page: window.location.pathname,
-          timestamp: new Date().toISOString()
+          feedback_type: rating, // 'good' or 'bad'
+          feedback: feedback.trim() || null, // Send null if empty
         }),
       });
 
@@ -60,8 +52,8 @@ export default function FeedbackWidget() {
         throw new Error('Failed to submit feedback');
       }
 
-      const result = await response.json();
-      console.log('Feedback submitted successfully:', result);
+      const data = await response.json();
+      console.log('Feedback submitted successfully:', data);
 
       setShowSuccess(true);
       
@@ -74,8 +66,7 @@ export default function FeedbackWidget() {
       }, 2000);
     } catch (error) {
       console.error("Error submitting feedback:", error);
-      // You could add error handling UI here
-      alert('Failed to submit feedback. Please try again.');
+      // You might want to show an error message to the user here
     } finally {
       setIsSubmitting(false);
     }
@@ -119,9 +110,9 @@ export default function FeedbackWidget() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setRating('up')}
+                    onClick={() => setRating('good')}
                     className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                      rating === 'up'
+                      rating === 'good'
                         ? 'border-green-500 bg-green-50 text-green-700'
                         : 'border-gray-200 hover:border-gray-300 text-gray-600'
                     }`}
@@ -145,9 +136,9 @@ export default function FeedbackWidget() {
                   
                   <button
                     type="button"
-                    onClick={() => setRating('down')}
+                    onClick={() => setRating('bad')}
                     className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                      rating === 'down'
+                      rating === 'bad'
                         ? 'border-red-500 bg-red-50 text-red-700'
                         : 'border-gray-200 hover:border-gray-300 text-gray-600'
                     }`}
@@ -349,51 +340,4 @@ export default function FeedbackWidget() {
       `}</style>
     </>
   );
-}
-
-
-
-// *****************************
-
-const API_BASE_URL = process.env.API_BASE_URL;
-
-export async function POST(request) {
-  try {
-    const body = await request.json();
-    
-    // Call your FastAPI backend
-    const response = await fetch(`${API_BASE_URL}/feedback`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        feedback_type: body.feedback_type,
-        feedback: body.feedback
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to submit feedback to backend');
-    }
-
-    const result = await response.json();
-    
-    return new Response(
-      JSON.stringify(result),
-      { 
-        status: 200, 
-        headers: { "Content-Type": "application/json" } 
-      }
-    );
-  } catch (error) {
-    console.error("Error processing feedback:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to process feedback" }),
-      { 
-        status: 500, 
-        headers: { "Content-Type": "application/json" } 
-      }
-    );
-  }
 }
