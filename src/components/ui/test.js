@@ -36,27 +36,44 @@ export default function FeedbackWidget() {
     setIsSubmitting(true);
 
     try {
-      // IMPORTANT: Replace this URL with your actual FastAPI backend URL
-      // For local development, it might be something like: http://localhost:8000/feedback
-      // For production: https://your-api-domain.com/feedback
-      const API_URL = 'http://localhost:8000/feedback'; // <-- CHANGE THIS TO YOUR ACTUAL BACKEND URL
+      // Your backend URL
+      const API_URL = 'http://localhost:8000/feedback'; // Change this to your actual backend URL
       
+      // Prepare the request body matching your backend expectations
+      const requestBody = {
+        feedback_type: rating, // 'good' or 'bad'
+        description: feedback.trim() || "No additional feedback provided" // Changed from 'feedback' to 'description'
+      };
+
+      console.log('Sending feedback:', requestBody); // Debug log
+
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-soeid': 'as03378' // Your required header
         },
-        body: JSON.stringify({
-          feedback_type: rating, // 'good' or 'bad'
-          feedback: feedback.trim() || null, // Send null if empty
-        }),
+        body: JSON.stringify(requestBody)
       });
 
+      // Log response for debugging
+      const responseText = await response.text();
+      console.log('Response status:', response.status);
+      console.log('Response text:', responseText);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Parse error details if available
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error('API Error:', errorData);
+          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        } catch {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       }
 
-      const data = await response.json();
+      // Parse successful response
+      const data = JSON.parse(responseText);
       console.log('Feedback submitted successfully:', data);
 
       setShowSuccess(true);
@@ -70,7 +87,7 @@ export default function FeedbackWidget() {
       }, 2000);
     } catch (error) {
       console.error("Error submitting feedback:", error);
-      alert("Failed to submit feedback. Please try again later.");
+      alert(`Failed to submit feedback: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
