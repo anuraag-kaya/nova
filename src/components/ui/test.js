@@ -42,7 +42,7 @@ export default function FeedbackWidget() {
       // Prepare the request body matching your backend expectations
       const requestBody = {
         feedback_type: rating, // 'good' or 'bad'
-        description: feedback.trim() || "No additional feedback provided" // Changed from 'feedback' to 'description'
+        feedback: feedback.trim() || "No additional feedback provided" // Backend expects 'feedback' field
       };
 
       console.log('Sending feedback:', requestBody); // Debug log
