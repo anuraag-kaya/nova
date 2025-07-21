@@ -29,8 +29,6 @@ export default function Documentation() {
       items: [
         { id: "introduction", title: "Introduction to ASTRA", matches: 2 },
         { id: "quickstart", title: "Quick Start Guide", matches: 1 },
-        { id: "navigation", title: "Navigation & UI", matches: 0 },
-        { id: "keyconcepts", title: "Key Concepts", matches: 0 },
       ]
     },
     home: {
@@ -39,7 +37,6 @@ export default function Documentation() {
       items: [
         { id: "homepage", title: "Home Page Overview", matches: 1 },
         { id: "recentitems", title: "Recently Viewed Items", matches: 3 },
-        { id: "dashboard", title: "Dashboard Features", matches: 0 },
       ]
     },
     studio: {
@@ -60,16 +57,6 @@ export default function Documentation() {
         { id: "analyticsoverview", title: "Analytics Overview", matches: 1 },
         { id: "executive", title: "Executive Dashboard", matches: 2 },
         { id: "operational", title: "Operational Metrics", matches: 2 },
-        { id: "customreports", title: "Custom Reports", matches: 0 },
-      ]
-    },
-    integrations: {
-      title: "Integrations & API",
-      icon: "🔗",
-      items: [
-        { id: "apiref", title: "API Reference", matches: 0 },
-        { id: "webhooks", title: "Webhooks", matches: 1 },
-        { id: "thirdparty", title: "Third-party Tools", matches: 0 },
       ]
     },
     troubleshooting: {
@@ -77,8 +64,6 @@ export default function Documentation() {
       icon: "🛠️",
       items: [
         { id: "faq", title: "Frequently Asked Questions", matches: 1 },
-        { id: "commonissues", title: "Common Issues", matches: 0 },
-        { id: "support", title: "Contact Support", matches: 0 },
       ]
     }
   };
@@ -1179,9 +1164,9 @@ export default function Documentation() {
               </>
             ) : (
               <div className="text-center py-20">
-                <div className="text-6xl mb-4">📄</div>
-                <h2 className="text-2xl font-semibold text-gray-800 mb-2">Content Coming Soon</h2>
-                <p className="text-gray-600">This documentation section is being prepared.</p>
+                <div className="text-6xl mb-4">🚀</div>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-2">Welcome to ASTRA Documentation</h2>
+                <p className="text-gray-600">Select a topic from the left sidebar to begin.</p>
               </div>
             )}
           </div>
@@ -1207,4 +1192,4 @@ export default function Documentation() {
       </footer>
     </div>
   );
-} 
+}
