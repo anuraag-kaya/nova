@@ -14,12 +14,16 @@ const ChartView = ({ data, tabId }) => {
       dataTypes: {},
       patterns: {},
       insights: [],
-      chartRecommendation: null
+      chartRecommendation: null,
+      scenario: 'unknown'
     };
     
     // Get all column names
     const columnNames = Object.keys(tableData[0] || {});
     analysis.totalColumns = columnNames.length;
+    
+    // Detect scenario based on column names and tabId
+    analysis.scenario = detectScenario(columnNames, tabId);
     
     // Analyze each column in detail
     columnNames.forEach(columnName => {
@@ -94,158 +98,248 @@ const ChartView = ({ data, tabId }) => {
       analysis.dataTypes[columnAnalysis.type] = (analysis.dataTypes[columnAnalysis.type] || 0) + 1;
     });
     
-    // Generate insights based on analysis
+    // Generate insights and recommendations based on scenario
     analysis.insights = generateDataInsights(analysis);
     analysis.chartRecommendation = recommendOptimalChart(analysis);
     
     return analysis;
   };
 
+  // Detect which scenario we're dealing with
+  const detectScenario = (columnNames, tabId) => {
+    const lowerColumns = columnNames.map(col => col.toLowerCase());
+    
+    // Scenario 1: Unmapped Test Cases (CREATED BY grouping)
+    if (lowerColumns.some(col => col.includes('created') && col.includes('by')) ||
+        tabId?.toLowerCase().includes('unmapped') && tabId?.toLowerCase().includes('test')) {
+      return 'unmapped_test_cases';
+    }
+    
+    // Scenario 2: User Story - Test Case Mapping
+    if (lowerColumns.some(col => col.includes('user') && col.includes('story')) &&
+        lowerColumns.some(col => col.includes('total') && col.includes('test')) &&
+        lowerColumns.some(col => col.includes('astra'))) {
+      return 'user_story_mapping';
+    }
+    
+    // Scenario 3: Test Cases Without Steps
+    if (lowerColumns.some(col => col.includes('test') && col.includes('case') && col.includes('title')) &&
+        lowerColumns.some(col => col.includes('assigned')) &&
+        lowerColumns.some(col => col.includes('modified'))) {
+      return 'test_cases_without_steps';
+    }
+    
+    // Scenario 4: Unmapped User Stories (Priority + Status)
+    if (lowerColumns.some(col => col.includes('user') && col.includes('story')) &&
+        lowerColumns.some(col => col.includes('priority')) &&
+        lowerColumns.some(col => col.includes('status')) &&
+        !lowerColumns.some(col => col.includes('total') && col.includes('test'))) {
+      return 'unmapped_user_stories';
+    }
+    
+    return 'unknown';
+  };
+
   // Generate intelligent insights about the data
   const generateDataInsights = (analysis) => {
     const insights = [];
     
-    // Data volume insights
-    if (analysis.totalRecords > 10000) {
+    switch (analysis.scenario) {
+      case 'unmapped_test_cases':
+        const createdByCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('created') && col.name.toLowerCase().includes('by')
+        );
+        if (createdByCol) {
+          insights.push({
+            type: 'productivity',
+            message: `${createdByCol.uniqueCount} team members have created test cases`,
+            icon: '👥',
+            color: 'blue'
+          });
+        }
+        break;
+        
+      case 'user_story_mapping':
+        const totalTestCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('total') && col.name.toLowerCase().includes('test')
+        );
+        const astraCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('astra')
+        );
+        if (totalTestCol && astraCol) {
+          const totalSum = totalTestCol.statistics.sum || 0;
+          const astraSum = astraCol.statistics.sum || 0;
+          const coverage = totalSum > 0 ? ((astraSum / totalSum) * 100).toFixed(1) : 0;
+          insights.push({
+            type: 'coverage',
+            message: `${coverage}% of test cases are created in ASTRA`,
+            icon: '📊',
+            color: coverage > 50 ? 'green' : 'orange'
+          });
+        }
+        break;
+        
+      case 'test_cases_without_steps':
+        const assignedCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('assigned')
+        );
+        if (assignedCol) {
+          insights.push({
+            type: 'workload',
+            message: `${assignedCol.uniqueCount} team members have incomplete test cases`,
+            icon: '⚠️',
+            color: 'red'
+          });
+        }
+        break;
+        
+      case 'unmapped_user_stories':
+        const priorityCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('priority')
+        );
+        const statusCol = analysis.columns.find(col => 
+          col.name.toLowerCase().includes('status')
+        );
+        if (priorityCol && statusCol) {
+          const highPriority = priorityCol.topValues.find(v => v.value.toLowerCase() === 'high');
+          const openStatus = statusCol.topValues.find(v => v.value.toLowerCase() === 'open');
+          insights.push({
+            type: 'priority',
+            message: `${highPriority?.count || 0} high-priority user stories need attention`,
+            icon: '🔥',
+            color: 'red'
+          });
+        }
+        break;
+    }
+    
+    // General insights
+    if (analysis.totalRecords > 100) {
       insights.push({
         type: 'volume',
         message: `Large dataset with ${analysis.totalRecords.toLocaleString()} records`,
-        icon: '📊',
-        color: 'blue'
-      });
-    } else if (analysis.totalRecords < 10) {
-      insights.push({
-        type: 'volume',
-        message: `Small dataset - consider collecting more data`,
-        icon: '⚠️',
-        color: 'yellow'
-      });
-    }
-    
-    // Data quality insights
-    const columnsWithMissingData = analysis.columns.filter(col => col.completenessRatio < 0.9);
-    if (columnsWithMissingData.length > 0) {
-      insights.push({
-        type: 'quality',
-        message: `${columnsWithMissingData.length} columns have missing data`,
-        icon: '🚨',
-        color: 'red'
-      });
-    }
-    
-    // Unique value insights
-    const highCardinalityColumns = analysis.columns.filter(col => 
-      col.type === 'categorical' && col.uniquenessRatio > 0.8 && col.uniqueCount > 20
-    );
-    if (highCardinalityColumns.length > 0) {
-      insights.push({
-        type: 'cardinality',
-        message: `${highCardinalityColumns.length} columns have too many unique values for effective visualization`,
-        icon: '🔍',
-        color: 'orange'
-      });
-    }
-    
-    // Numeric data insights
-    const numericColumns = analysis.columns.filter(col => col.type === 'numeric' || col.type === 'integer');
-    if (numericColumns.length >= 2) {
-      insights.push({
-        type: 'analysis',
-        message: `${numericColumns.length} numeric columns available for correlation analysis`,
         icon: '📈',
-        color: 'green'
+        color: 'blue'
       });
     }
     
     return insights;
   };
 
-  // Smart chart recommendation based on data characteristics
+  // Smart chart recommendation based on scenario
   const recommendOptimalChart = (analysis) => {
-    const { columns, totalRecords } = analysis;
-    const numericCols = columns.filter(col => col.type === 'numeric' || col.type === 'integer');
-    const categoricalCols = columns.filter(col => 
-      col.type === 'categorical' && col.uniqueCount <= 50 && col.uniquenessRatio < 0.9
-    );
-    const dateCols = columns.filter(col => col.type === 'date');
+    const { columns, scenario } = analysis;
     
-    // Special case: Look for "CREATED BY" or similar columns for grouping
-    const createdByCol = columns.find(col => 
-      col.name.toLowerCase().includes('created') && col.name.toLowerCase().includes('by') ||
-      col.name.toLowerCase().includes('author') ||
-      col.name.toLowerCase().includes('owner') ||
-      col.name.toLowerCase().includes('assignee')
-    );
-    
-    const idCol = columns.find(col => 
-      col.name.toLowerCase().includes('id') && 
-      col.type === 'identifier' && 
-      col.uniquenessRatio > 0.9
-    );
-    
-    // Priority 1: If we have CREATED BY column and ID column, create grouped bar chart
-    if (createdByCol && idCol) {
-      return {
-        type: 'grouped_bar',
-        reason: `Group by ${createdByCol.name} to show distribution of ${idCol.name} per creator`,
-        columns: { 
-          groupBy: createdByCol.name, 
-          countBy: idCol.name,
-          title: `${idCol.name} Count by ${createdByCol.name}`
-        },
-        confidence: 0.95
-      };
+    switch (scenario) {
+      case 'unmapped_test_cases':
+        const createdByCol = columns.find(col => 
+          col.name.toLowerCase().includes('created') && col.name.toLowerCase().includes('by')
+        );
+        const idCol = columns.find(col => 
+          col.name.toLowerCase().includes('id') && col.type === 'identifier'
+        );
+        
+        if (createdByCol && idCol) {
+          return {
+            type: 'grouped_bar',
+            reason: `Group by ${createdByCol.name} to show test case creation productivity`,
+            columns: { 
+              groupBy: createdByCol.name, 
+              countBy: idCol.name,
+              title: `Test Cases Created by Team Member`
+            },
+            confidence: 0.95
+          };
+        }
+        break;
+        
+      case 'user_story_mapping':
+        const totalTestCol = columns.find(col => 
+          col.name.toLowerCase().includes('total') && col.name.toLowerCase().includes('test')
+        );
+        const astraCol = columns.find(col => 
+          col.name.toLowerCase().includes('astra')
+        );
+        const userStoryCol = columns.find(col => 
+          col.name.toLowerCase().includes('user') && col.name.toLowerCase().includes('story') &&
+          col.name.toLowerCase().includes('title')
+        );
+        
+        if (totalTestCol && astraCol && userStoryCol) {
+          return {
+            type: 'stacked_bar',
+            reason: `Compare total test cases vs ASTRA-created test cases by user story`,
+            columns: { 
+              category: userStoryCol.name,
+              total: totalTestCol.name,
+              astra: astraCol.name,
+              title: `Test Case Coverage Analysis`
+            },
+            confidence: 0.9
+          };
+        }
+        break;
+        
+      case 'test_cases_without_steps':
+        const assignedCol = columns.find(col => 
+          col.name.toLowerCase().includes('assigned')
+        );
+        const titleCol = columns.find(col => 
+          col.name.toLowerCase().includes('test') && col.name.toLowerCase().includes('case')
+        );
+        
+        if (assignedCol && titleCol) {
+          return {
+            type: 'grouped_bar',
+            reason: `Show workload distribution - incomplete test cases by assignee`,
+            columns: { 
+              groupBy: assignedCol.name,
+              countBy: titleCol.name,
+              title: `Incomplete Test Cases by Assignee`
+            },
+            confidence: 0.85
+          };
+        }
+        break;
+        
+      case 'unmapped_user_stories':
+        const priorityCol = columns.find(col => 
+          col.name.toLowerCase().includes('priority')
+        );
+        const statusCol = columns.find(col => 
+          col.name.toLowerCase().includes('status')
+        );
+        
+        if (priorityCol && statusCol) {
+          return {
+            type: 'dual_pie',
+            reason: `Show priority and status distribution of unmapped user stories`,
+            columns: { 
+              priority: priorityCol.name,
+              status: statusCol.name,
+              title: `User Stories Analysis`
+            },
+            confidence: 0.9
+          };
+        }
+        break;
     }
     
-    // Priority 2: Regular categorical analysis
+    // Fallback to general logic
+    const categoricalCols = columns.filter(col => 
+      col.type === 'categorical' && col.uniqueCount <= 20 && col.uniquenessRatio < 0.8
+    );
+    
     if (categoricalCols.length >= 1) {
       const categoryCol = categoricalCols[0];
-      
-      if (categoryCol.uniqueCount <= 6) {
-        return {
-          type: 'pie',
-          reason: `Perfect for showing ${categoryCol.name} distribution with ${categoryCol.uniqueCount} categories`,
-          columns: { category: categoryCol.name },
-          confidence: 0.9
-        };
-      } else if (categoryCol.uniqueCount <= 25) {
-        return {
-          type: 'bar',
-          reason: `Bar chart ideal for ${categoryCol.uniqueCount} categories of ${categoryCol.name}`,
-          columns: { category: categoryCol.name },
-          confidence: 0.85
-        };
-      }
-    }
-    
-    if (numericCols.length >= 2) {
-      if (dateCols.length > 0) {
-        return {
-          type: 'line',
-          reason: `Time series analysis with ${numericCols.length} metrics`,
-          columns: { x: dateCols[0].name, y: numericCols[0].name },
-          confidence: 0.9
-        };
-      } else {
-        return {
-          type: 'scatter',
-          reason: `Correlation analysis between ${numericCols[0].name} and ${numericCols[1].name}`,
-          columns: { x: numericCols[0].name, y: numericCols[1].name },
-          confidence: 0.8
-        };
-      }
-    }
-    
-    if (numericCols.length === 1) {
       return {
-        type: 'histogram',
-        reason: `Distribution analysis of ${numericCols[0].name}`,
-        columns: { value: numericCols[0].name },
+        type: 'bar',
+        reason: `Bar chart for ${categoryCol.name} distribution`,
+        columns: { category: categoryCol.name },
         confidence: 0.7
       };
     }
     
-    // Default fallback
     return {
       type: 'table',
       reason: 'Data structure best suited for tabular display',
@@ -297,22 +391,24 @@ const ChartView = ({ data, tabId }) => {
     };
 
     // Generate premium color palette
-    const generateColors = (count) => {
-      const colors = [
-        '#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', 
-        '#ef4444', '#ec4899', '#84cc16', '#f97316', '#3b82f6'
-      ];
-      return colors.slice(0, count);
+    const generateColors = (count, type = 'default') => {
+      const palettes = {
+        default: ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'],
+        productivity: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899'],
+        priority: ['#ef4444', '#f59e0b', '#10b981', '#6b7280'],
+        status: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
+      };
+      
+      const colors = palettes[type] || palettes.default;
+      return Array.from({ length: count }, (_, i) => colors[i % colors.length]);
     };
 
     switch (recommendation.type) {
       case 'grouped_bar': {
-        // Special handling for CREATED BY grouping
+        // For Unmapped Test Cases and Test Cases Without Steps
         const groupByCol = recommendation.columns.groupBy;
-        const countByCol = recommendation.columns.countBy;
-        
-        // Group data by the specified column (e.g., CREATED BY)
         const groupedData = {};
+        
         data.forEach(row => {
           const groupKey = row[groupByCol] || 'Unknown';
           if (!groupedData[groupKey]) {
@@ -321,7 +417,6 @@ const ChartView = ({ data, tabId }) => {
           groupedData[groupKey]++;
         });
         
-        // Sort by count (descending) and take top 15
         const sortedGroups = Object.entries(groupedData)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 15);
@@ -332,8 +427,8 @@ const ChartView = ({ data, tabId }) => {
         return {
           ...baseConfig,
           title: {
-            text: recommendation.columns.title || `Test Cases by Creator`,
-            subtext: `${analysis.totalRecords} total test cases across ${Object.keys(groupedData).length} creators`,
+            text: recommendation.columns.title,
+            subtext: `${analysis.totalRecords} total records across ${Object.keys(groupedData).length} ${groupByCol.toLowerCase()}s`,
             left: 'center',
             top: 20,
             textStyle: {
@@ -356,44 +451,23 @@ const ChartView = ({ data, tabId }) => {
               interval: 0,
               formatter: (value) => {
                 const str = String(value);
-                return str.length > 10 ? str.substring(0, 10) + '...' : str;
+                return str.length > 12 ? str.substring(0, 12) + '...' : str;
               }
             },
-            axisTick: {
-              alignWithLabel: true,
-              lineStyle: { color: '#e5e7eb' }
-            },
-            axisLine: {
-              lineStyle: { color: '#e5e7eb' }
-            }
+            axisTick: { alignWithLabel: true, lineStyle: { color: '#e5e7eb' } },
+            axisLine: { lineStyle: { color: '#e5e7eb' } }
           },
           yAxis: {
             type: 'value',
-            name: 'Number of Test Cases',
-            nameTextStyle: {
-              fontSize: 12,
-              color: '#6b7280',
-              fontWeight: 500
-            },
-            axisLabel: {
-              fontSize: 11,
-              color: '#6b7280',
-              formatter: (value) => {
-                if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
-                return value;
-              }
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#f3f4f6',
-                type: 'dashed'
-              }
-            },
+            name: 'Count',
+            nameTextStyle: { fontSize: 12, color: '#6b7280', fontWeight: 500 },
+            axisLabel: { fontSize: 11, color: '#6b7280' },
+            splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } },
             axisLine: { show: false }
           },
           series: [{
             type: 'bar',
-            name: 'Test Cases Created',
+            name: 'Count',
             data: values.map((value, index) => ({
               value,
               itemStyle: {
@@ -401,22 +475,18 @@ const ChartView = ({ data, tabId }) => {
                   type: 'linear',
                   x: 0, y: 0, x2: 0, y2: 1,
                   colorStops: [
-                    { offset: 0, color: index === 0 ? '#10b981' : index === 1 ? '#3b82f6' : index === 2 ? '#8b5cf6' : '#6366f1' },
-                    { offset: 1, color: (index === 0 ? '#10b981' : index === 1 ? '#3b82f6' : index === 2 ? '#8b5cf6' : '#6366f1') + 'aa' }
+                    { offset: 0, color: generateColors(1, 'productivity')[0] },
+                    { offset: 1, color: generateColors(1, 'productivity')[0] + 'aa' }
                   ]
                 },
                 borderRadius: [6, 6, 0, 0],
-                shadowColor: 'rgba(99, 102, 241, 0.3)',
+                shadowColor: 'rgba(16, 185, 129, 0.3)',
                 shadowBlur: 8,
                 shadowOffsetY: 4
               }
             })),
             emphasis: {
-              itemStyle: {
-                shadowBlur: 15,
-                shadowOffsetY: 8,
-                scale: 1.02
-              }
+              itemStyle: { shadowBlur: 15, shadowOffsetY: 8, scale: 1.02 }
             },
             barMaxWidth: 50,
             animationDelay: (idx) => idx * 100,
@@ -425,277 +495,205 @@ const ChartView = ({ data, tabId }) => {
               position: 'top',
               fontSize: 11,
               fontWeight: 600,
-              color: '#374151',
-              formatter: '{c}'
+              color: '#374151'
             }
-          }],
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: {
-              type: 'shadow',
-              shadowStyle: {
-                color: 'rgba(99, 102, 241, 0.1)'
-              }
-            },
-            formatter: function(params) {
-              const param = params[0];
-              return `
-                <div style="font-weight: 600; margin-bottom: 4px;">${param.name}</div>
-                <div style="display: flex; align-items: center;">
-                  <span style="display: inline-block; width: 8px; height: 8px; background: ${param.color}; border-radius: 50%; margin-right: 8px;"></span>
-                  <span>${param.seriesName}: <strong>${param.value}</strong> test cases</span>
-                </div>
-              `;
-            }
-          }
+          }]
         };
       }
 
-      case 'pie': {
-        const categoryCol = analysis.columns.find(col => col.name === recommendation.columns.category);
-        const valueCol = analysis.columns.find(col => col.name === recommendation.columns.value);
+      case 'stacked_bar': {
+        // For User Story - Test Case Mapping
+        const categoryCol = recommendation.columns.category;
+        const totalCol = recommendation.columns.total;
+        const astraCol = recommendation.columns.astra;
         
-        // Aggregate data for pie chart
-        const pieData = categoryCol.topValues.map(item => ({
-          name: item.value,
-          value: parseInt(item.count)
-        }));
+        // Take top 15 user stories by total test cases
+        const sortedData = [...data]
+          .sort((a, b) => (Number(b[totalCol]) || 0) - (Number(a[totalCol]) || 0))
+          .slice(0, 15);
+        
+        const categories = sortedData.map(row => {
+          const title = String(row[categoryCol] || 'Unknown');
+          return title.length > 25 ? title.substring(0, 25) + '...' : title;
+        });
+        
+        const totalValues = sortedData.map(row => Number(row[totalCol]) || 0);
+        const astraValues = sortedData.map(row => Number(row[astraCol]) || 0);
+        const remainingValues = totalValues.map((total, i) => Math.max(0, total - astraValues[i]));
         
         return {
           ...baseConfig,
           title: {
-            text: `${categoryCol.name} Distribution`,
-            subtext: `${analysis.totalRecords} records analyzed`,
+            text: recommendation.columns.title,
+            subtext: `Top ${categories.length} user stories by test case volume`,
             left: 'center',
             top: 20,
-            textStyle: {
-              fontSize: 20,
-              fontWeight: 700,
-              color: '#111827',
-              lineHeight: 28
-            },
-            subtextStyle: {
-              fontSize: 12,
-              color: '#6b7280',
-              lineHeight: 20
-            }
+            textStyle: { fontSize: 20, fontWeight: 700, color: '#111827' },
+            subtextStyle: { fontSize: 12, color: '#6b7280' }
           },
           legend: {
-            type: 'scroll',
-            bottom: 15,
+            data: ['Created in ASTRA', 'Other Test Cases'],
+            bottom: 20,
             itemGap: 20,
-            itemWidth: 14,
-            itemHeight: 14,
-            textStyle: {
-              fontSize: 11,
-              color: '#4b5563'
-            }
-          },
-          series: [{
-            type: 'pie',
-            radius: ['0%', '65%'],
-            center: ['50%', '55%'],
-            data: pieData,
-            emphasis: {
-              itemStyle: {
-                shadowBlur: 30,
-                shadowOffsetX: 0,
-                shadowColor: 'rgba(0, 0, 0, 0.25)',
-                borderWidth: 4,
-                borderColor: '#ffffff',
-                scale: 1.05
-              }
-            },
-            itemStyle: {
-              borderRadius: 8,
-              borderWidth: 3,
-              borderColor: '#ffffff'
-            },
-            label: {
-              show: true,
-              fontSize: 11,
-              fontWeight: 600,
-              formatter: '{b}\n{d}%',
-              color: '#374151'
-            },
-            labelLine: {
-              smooth: true,
-              length: 20,
-              length2: 10
-            },
-            animationType: 'scale',
-            animationEasing: 'elasticOut'
-          }],
-          color: generateColors(pieData.length)
-        };
-      }
-
-      case 'bar': {
-        const categoryCol = analysis.columns.find(col => col.name === recommendation.columns.category);
-        const valueCol = analysis.columns.find(col => col.name === recommendation.columns.value);
-        
-        const categories = categoryCol.topValues.map(item => item.value);
-        const values = categoryCol.topValues.map(item => parseInt(item.count));
-        
-        return {
-          ...baseConfig,
-          title: {
-            text: `${categoryCol.name} Analysis`,
-            subtext: `Top ${categories.length} categories from ${analysis.totalRecords} records`,
-            left: 'center',
-            top: 20,
-            textStyle: {
-              fontSize: 20,
-              fontWeight: 700,
-              color: '#111827'
-            },
-            subtextStyle: {
-              fontSize: 12,
-              color: '#6b7280'
-            }
+            textStyle: { fontSize: 11, color: '#4b5563' }
           },
           xAxis: {
             type: 'category',
             data: categories,
             axisLabel: {
-              rotate: categories.some(cat => String(cat).length > 8) ? 45 : 0,
-              fontSize: 11,
+              rotate: 45,
+              fontSize: 10,
               color: '#6b7280',
-              interval: 0,
-              formatter: (value) => {
-                const str = String(value);
-                return str.length > 12 ? str.substring(0, 12) + '...' : str;
-              }
+              interval: 0
             },
-            axisTick: {
-              alignWithLabel: true,
-              lineStyle: { color: '#e5e7eb' }
-            },
-            axisLine: {
-              lineStyle: { color: '#e5e7eb' }
-            }
+            axisTick: { alignWithLabel: true },
+            axisLine: { lineStyle: { color: '#e5e7eb' } }
           },
           yAxis: {
             type: 'value',
-            axisLabel: {
-              fontSize: 11,
-              color: '#6b7280',
-              formatter: (value) => {
-                if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-                if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
-                return value;
-              }
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#f3f4f6',
-                type: 'dashed'
-              }
-            },
-            axisLine: { show: false }
+            name: 'Test Cases',
+            nameTextStyle: { fontSize: 12, color: '#6b7280' },
+            axisLabel: { fontSize: 11, color: '#6b7280' },
+            splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } }
           },
-          series: [{
-            type: 'bar',
-            data: values,
-            itemStyle: {
-              color: {
-                type: 'linear',
-                x: 0, y: 0, x2: 0, y2: 1,
-                colorStops: [
-                  { offset: 0, color: '#6366f1' },
-                  { offset: 1, color: '#6366f1aa' }
-                ]
-              },
-              borderRadius: [6, 6, 0, 0],
-              shadowColor: 'rgba(99, 102, 241, 0.3)',
-              shadowBlur: 10,
-              shadowOffsetY: 4
-            },
-            emphasis: {
+          series: [
+            {
+              name: 'Created in ASTRA',
+              type: 'bar',
+              stack: 'total',
+              data: astraValues,
               itemStyle: {
-                shadowBlur: 20,
-                shadowOffsetY: 8,
-                scale: 1.02
-              }
+                color: {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#10b981' },
+                    { offset: 1, color: '#10b981dd' }
+                  ]
+                },
+                borderRadius: [0, 0, 0, 0]
+              },
+              emphasis: { itemStyle: { shadowBlur: 10 } }
             },
-            barMaxWidth: 60,
-            animationDelay: (idx) => idx * 100
-          }]
+            {
+              name: 'Other Test Cases',
+              type: 'bar',
+              stack: 'total',
+              data: remainingValues,
+              itemStyle: {
+                color: {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#f59e0b' },
+                    { offset: 1, color: '#f59e0bdd' }
+                  ]
+                },
+                borderRadius: [4, 4, 0, 0]
+              },
+              emphasis: { itemStyle: { shadowBlur: 10 } }
+            }
+          ]
         };
       }
 
-      case 'line': {
-        // For line charts, we'll use the first numeric column as Y axis
-        const numericCol = analysis.columns.find(col => col.type === 'numeric' || col.type === 'integer');
-        const values = data.map((row, index) => [index, Number(row[numericCol.name]) || 0]);
+      case 'dual_pie': {
+        // For Unmapped User Stories - Priority and Status
+        const priorityCol = recommendation.columns.priority;
+        const statusCol = recommendation.columns.status;
+        
+        // Priority data
+        const priorityData = {};
+        data.forEach(row => {
+          const priority = row[priorityCol] || 'Unknown';
+          priorityData[priority] = (priorityData[priority] || 0) + 1;
+        });
+        
+        // Status data
+        const statusData = {};
+        data.forEach(row => {
+          const status = row[statusCol] || 'Unknown';
+          statusData[status] = (statusData[status] || 0) + 1;
+        });
+        
+        const priorityPieData = Object.entries(priorityData).map(([name, value]) => ({ name, value }));
+        const statusPieData = Object.entries(statusData).map(([name, value]) => ({ name, value }));
         
         return {
           ...baseConfig,
           title: {
-            text: `${numericCol.name} Trend`,
-            subtext: `${analysis.totalRecords} data points`,
+            text: recommendation.columns.title,
+            subtext: `${analysis.totalRecords} unmapped user stories`,
             left: 'center',
             top: 20,
-            textStyle: {
-              fontSize: 20,
-              fontWeight: 700,
-              color: '#111827'
-            },
-            subtextStyle: {
-              fontSize: 12,
-              color: '#6b7280'
-            }
+            textStyle: { fontSize: 20, fontWeight: 700, color: '#111827' },
+            subtextStyle: { fontSize: 12, color: '#6b7280' }
           },
-          xAxis: {
-            type: 'value',
-            axisLabel: {
-              fontSize: 11,
-              color: '#6b7280'
+          legend: [
+            {
+              data: priorityPieData.map(item => item.name),
+              left: '20%',
+              bottom: 20,
+              textStyle: { fontSize: 11, color: '#4b5563' }
             },
-            axisLine: {
-              lineStyle: { color: '#e5e7eb' }
+            {
+              data: statusPieData.map(item => item.name),
+              right: '20%',
+              bottom: 20,
+              textStyle: { fontSize: 11, color: '#4b5563' }
             }
-          },
-          yAxis: {
-            type: 'value',
-            axisLabel: {
-              fontSize: 11,
-              color: '#6b7280'
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#f3f4f6',
-                type: 'dashed'
-              }
-            }
-          },
-          series: [{
-            type: 'line',
-            data: values,
-            smooth: true,
-            lineStyle: {
-              width: 3,
-              color: '#06b6d4'
-            },
-            itemStyle: {
-              color: '#06b6d4',
-              borderColor: '#ffffff',
-              borderWidth: 2
-            },
-            areaStyle: {
-              color: {
-                type: 'linear',
-                x: 0, y: 0, x2: 0, y2: 1,
-                colorStops: [
-                  { offset: 0, color: '#06b6d440' },
-                  { offset: 1, color: '#06b6d410' }
-                ]
+          ],
+          series: [
+            {
+              name: 'Priority',
+              type: 'pie',
+              radius: ['20%', '45%'],
+              center: ['25%', '55%'],
+              data: priorityPieData,
+              itemStyle: {
+                borderRadius: 8,
+                borderWidth: 3,
+                borderColor: '#ffffff'
+              },
+              label: {
+                fontSize: 11,
+                fontWeight: 600,
+                formatter: '{b}\n{d}%'
+              },
+              emphasis: {
+                itemStyle: {
+                  shadowBlur: 20,
+                  shadowOffsetX: 0,
+                  shadowColor: 'rgba(0, 0, 0, 0.3)'
+                }
               }
             },
-            symbol: 'circle',
-            symbolSize: 6,
-            animationDelay: (idx) => idx * 20
-          }]
+            {
+              name: 'Status',
+              type: 'pie',
+              radius: ['20%', '45%'],
+              center: ['75%', '55%'],
+              data: statusPieData,
+              itemStyle: {
+                borderRadius: 8,
+                borderWidth: 3,
+                borderColor: '#ffffff'
+              },
+              label: {
+                fontSize: 11,
+                fontWeight: 600,
+                formatter: '{b}\n{d}%'
+              },
+              emphasis: {
+                itemStyle: {
+                  shadowBlur: 20,
+                  shadowOffsetX: 0,
+                  shadowColor: 'rgba(0, 0, 0, 0.3)'
+                }
+              }
+            }
+          ],
+          color: [...generateColors(priorityPieData.length, 'priority'), ...generateColors(statusPieData.length, 'status')]
         };
       }
 
@@ -713,7 +711,6 @@ const ChartView = ({ data, tabId }) => {
 
     setLoading(true);
     
-    // Simulate processing time for better UX
     setTimeout(() => {
       const analysis = analyzeTableData(data);
       const config = generateChartConfiguration(analysis, analysis?.chartRecommendation);
@@ -737,8 +734,8 @@ const ChartView = ({ data, tabId }) => {
             </div>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">Analyzing Data</h3>
-            <p className="text-blue-700 text-sm">Reading table structure and generating insights...</p>
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">AI Analyzing Data</h3>
+            <p className="text-blue-700 text-sm">Detecting scenario and generating optimal visualization...</p>
           </div>
         </div>
       </div>
@@ -769,7 +766,7 @@ const ChartView = ({ data, tabId }) => {
       {/* Smart Analytics Header */}
       {dataAnalysis && (
         <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium text-gray-600">Records:</span>
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
@@ -777,32 +774,38 @@ const ChartView = ({ data, tabId }) => {
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-600">Columns:</span>
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
-                {dataAnalysis.totalColumns}
+              <span className="text-sm font-medium text-gray-600">Scenario:</span>
+              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold capitalize">
+                {dataAnalysis.scenario.replace(/_/g, ' ')}
               </span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium text-gray-600">Chart:</span>
-              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold capitalize">
-                {dataAnalysis.chartRecommendation?.type || 'Auto'}
+              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold capitalize">
+                {dataAnalysis.chartRecommendation?.type?.replace(/_/g, ' ') || 'Auto'}
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-600">Quality:</span>
+              <span className="text-sm font-medium text-gray-600">Confidence:</span>
               <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
-                {Math.round(dataAnalysis.chartRecommendation?.confidence * 100 || 75)}%
+                {Math.round((dataAnalysis.chartRecommendation?.confidence || 0.75) * 100)}%
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-600">AI:</span>
+              <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-semibold">
+                🤖 Active
               </span>
             </div>
           </div>
           
-          {/* Insights */}
+          {/* AI Insights */}
           {dataAnalysis.insights && dataAnalysis.insights.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {dataAnalysis.insights.slice(0, 3).map((insight, index) => (
                 <div 
                   key={index}
-                  className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium
                     ${insight.color === 'blue' ? 'bg-blue-100 text-blue-700' :
                       insight.color === 'green' ? 'bg-green-100 text-green-700' :
                       insight.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
@@ -823,7 +826,7 @@ const ChartView = ({ data, tabId }) => {
         {chartConfig ? (
           <ReactECharts
             option={chartConfig}
-            style={{ height: 'calc(100% - 120px)', width: '100%', minHeight: '480px' }}
+            style={{ height: 'calc(100% - 140px)', width: '100%', minHeight: '480px' }}
             opts={{ renderer: 'svg', locale: 'en' }}
             notMerge={true}
             lazyUpdate={true}
