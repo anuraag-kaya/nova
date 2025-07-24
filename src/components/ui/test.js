@@ -233,6 +233,9 @@ const ChartView = ({ data, tabId }) => {
   const recommendOptimalChart = (analysis) => {
     const { columns, scenario } = analysis;
     
+    console.log('Recommending chart for scenario:', scenario);
+    console.log('Available columns:', columns.map(c => ({ name: c.name, type: c.type, uniqueCount: c.uniqueCount })));
+    
     switch (scenario) {
       case 'unmapped_test_cases':
         const createdByCol = columns.find(col => 
@@ -242,16 +245,37 @@ const ChartView = ({ data, tabId }) => {
           col.name.toLowerCase().includes('id') && col.type === 'identifier'
         );
         
-        if (createdByCol && idCol) {
+        console.log('Unmapped test cases - found columns:', { createdByCol: createdByCol?.name, idCol: idCol?.name });
+        
+        if (createdByCol) {
           return {
             type: 'grouped_bar',
             reason: `Group by ${createdByCol.name} to show test case creation productivity`,
             columns: { 
               groupBy: createdByCol.name, 
-              countBy: idCol.name,
+              countBy: idCol?.name || 'records',
               title: `Test Cases Created by Team Member`
             },
             confidence: 0.95
+          };
+        }
+        
+        // Fallback: Use first categorical column for grouping
+        const categoricalCol = columns.find(col => 
+          col.type === 'categorical' && col.uniqueCount > 1 && col.uniqueCount <= 20
+        );
+        
+        if (categoricalCol) {
+          console.log('Using fallback categorical column:', categoricalCol.name);
+          return {
+            type: 'grouped_bar',
+            reason: `Group by ${categoricalCol.name} (fallback)`,
+            columns: { 
+              groupBy: categoricalCol.name, 
+              countBy: 'records',
+              title: `Distribution by ${categoricalCol.name}`
+            },
+            confidence: 0.7
           };
         }
         break;
@@ -372,21 +396,44 @@ const ChartView = ({ data, tabId }) => {
         break;
     }
     
-    // Fallback to general logic
+    // Fallback to general logic - ENHANCED
     const categoricalCols = columns.filter(col => 
-      col.type === 'categorical' && col.uniqueCount <= 20 && col.uniquenessRatio < 0.8
+      col.type === 'categorical' && col.uniqueCount <= 20 && col.uniquenessRatio < 0.8 && col.uniqueCount > 1
     );
+    
+    console.log('Fallback - Found categorical columns:', categoricalCols.map(c => c.name));
     
     if (categoricalCols.length >= 1) {
       const categoryCol = categoricalCols[0];
       return {
-        type: 'bar',
+        type: 'grouped_bar', // Changed from 'bar' to 'grouped_bar' for consistency
         reason: `Bar chart for ${categoryCol.name} distribution`,
-        columns: { category: categoryCol.name },
+        columns: { 
+          groupBy: categoryCol.name,
+          countBy: 'records',
+          title: `Distribution by ${categoryCol.name}`
+        },
         confidence: 0.7
       };
     }
     
+    // FINAL FALLBACK: Create a simple count chart
+    if (columns.length > 0) {
+      console.log('Using final fallback - first column');
+      const firstCol = columns[0];
+      return {
+        type: 'grouped_bar',
+        reason: `Simple distribution chart using first available column`,
+        columns: { 
+          groupBy: firstCol.name,
+          countBy: 'records',
+          title: `Data Distribution`
+        },
+        confidence: 0.5
+      };
+    }
+    
+    console.log('No suitable chart type found');
     return {
       type: 'table',
       reason: 'Data structure best suited for tabular display',
@@ -454,9 +501,16 @@ const ChartView = ({ data, tabId }) => {
       case 'grouped_bar': {
         // For Unmapped Test Cases and Test Cases Without Steps
         const groupByCol = recommendation.columns.groupBy;
+        console.log('Generating grouped_bar chart for column:', groupByCol);
+        
+        if (!groupByCol) {
+          console.error('No groupBy column specified for grouped_bar chart');
+          return null;
+        }
+        
         const groupedData = {};
         
-        data.forEach(row => {
+        data.forEach((row, index) => {
           const groupKey = row[groupByCol] || 'Unknown';
           if (!groupedData[groupKey]) {
             groupedData[groupKey] = 0;
@@ -464,17 +518,31 @@ const ChartView = ({ data, tabId }) => {
           groupedData[groupKey]++;
         });
         
+        console.log('Grouped data:', groupedData);
+        
+        if (Object.keys(groupedData).length === 0) {
+          console.error('No valid groups found in data');
+          return null;
+        }
+        
         const sortedGroups = Object.entries(groupedData)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 15);
         
-        const categories = sortedGroups.map(([key]) => key);
+        const categories = sortedGroups.map(([key]) => String(key));
         const values = sortedGroups.map(([,count]) => count);
+        
+        console.log('Chart data prepared:', { categories, values });
+        
+        if (categories.length === 0 || values.length === 0) {
+          console.error('No valid chart data after processing');
+          return null;
+        }
         
         return {
           ...baseConfig,
           title: {
-            text: recommendation.columns.title,
+            text: recommendation.columns.title || 'Data Distribution',
             subtext: `${analysis.totalRecords} total records across ${Object.keys(groupedData).length} ${groupByCol.toLowerCase()}s`,
             left: 'center',
             top: 20,
@@ -921,25 +989,46 @@ const ChartView = ({ data, tabId }) => {
   // Main analysis effect
   useEffect(() => {
     if (!data || data.length === 0) {
+      console.log('No data provided to ChartView');
       setLoading(false);
       return;
     }
 
+    console.log('ChartView received data:', {
+      dataLength: data.length,
+      sampleData: data.slice(0, 2),
+      columns: Object.keys(data[0] || {}),
+      tabId
+    });
+
     setLoading(true);
     
     setTimeout(() => {
-      const analysis = analyzeTableData(data);
-      const config = generateChartConfiguration(analysis, analysis?.chartRecommendation);
-      
-      console.log('Analysis complete:', {
-        scenario: analysis?.scenario,
-        recommendation: analysis?.chartRecommendation,
-        hasConfig: !!config
-      });
-      
-      setDataAnalysis(analysis);
-      setChartConfig(config);
-      setLoading(false);
+      try {
+        const analysis = analyzeTableData(data);
+        console.log('Analysis result:', analysis);
+        
+        if (!analysis) {
+          console.error('Analysis failed - no analysis object returned');
+          setLoading(false);
+          return;
+        }
+
+        const config = generateChartConfiguration(analysis, analysis?.chartRecommendation);
+        console.log('Chart config generated:', {
+          hasConfig: !!config,
+          configKeys: config ? Object.keys(config) : null,
+          scenario: analysis.scenario,
+          recommendation: analysis.chartRecommendation
+        });
+        
+        setDataAnalysis(analysis);
+        setChartConfig(config);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error in chart analysis:', error);
+        setLoading(false);
+      }
     }, 500);
     
   }, [data, tabId]);
@@ -1045,20 +1134,39 @@ const ChartView = ({ data, tabId }) => {
       
       {/* Chart Display */}
       <div className="h-full">
-        {chartConfig ? (
+        {chartConfig && chartConfig.series && chartConfig.series.length > 0 ? (
           <ReactECharts
             option={chartConfig}
             style={{ height: 'calc(100% - 140px)', width: '100%', minHeight: '480px' }}
             opts={{ renderer: 'svg', locale: 'en' }}
             notMerge={true}
             lazyUpdate={true}
+            onChartReady={() => console.log('Chart rendered successfully')}
+            onEvents={{
+              'finished': () => console.log('Chart animation finished')
+            }}
           />
-        ) : (
-          <div className="flex items-center justify-center h-96">
+        ) : chartConfig ? (
+          <div className="flex items-center justify-center h-96 bg-yellow-50 border border-yellow-200 rounded-lg m-4">
             <div className="text-center">
-              <div className="text-4xl mb-4">🤖</div>
-              <h3 className="text-lg font-semibold text-gray-700">AI Analysis Complete</h3>
-              <p className="text-gray-500 text-sm">Ready to visualize your data</p>
+              <div className="text-4xl mb-4">⚠️</div>
+              <h3 className="text-lg font-semibold text-yellow-800">Chart Configuration Issue</h3>
+              <p className="text-yellow-700 text-sm mt-2">Chart config exists but no valid series data found</p>
+              <p className="text-yellow-600 text-xs mt-1">Check console for debugging information</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-96 bg-gray-50 border border-gray-200 rounded-lg m-4">
+            <div className="text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <h3 className="text-lg font-semibold text-gray-700">No Chart Configuration</h3>
+              <p className="text-gray-500 text-sm mt-2">
+                {dataAnalysis ? 
+                  `Unable to generate chart for scenario: ${dataAnalysis.scenario}` :
+                  'Data analysis not completed'
+                }
+              </p>
+              <p className="text-gray-400 text-xs mt-1">Check console for debugging information</p>
             </div>
           </div>
         )}
