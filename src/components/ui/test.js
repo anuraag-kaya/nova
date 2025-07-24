@@ -255,27 +255,37 @@ const ChartView = ({ data, tabId }) => {
         
       case 'user_story_mapping':
         const totalTestCol = columns.find(col => 
-          col.name.toLowerCase().includes('total') && col.name.toLowerCase().includes('test')
+          col.name.toLowerCase().includes('total') && 
+          col.name.toLowerCase().includes('test') &&
+          !col.name.toLowerCase().includes('astra')
         );
         const astraCol = columns.find(col => 
-          col.name.toLowerCase().includes('astra')
+          col.name.toLowerCase().includes('astra') || 
+          col.name.toLowerCase().includes('created') && col.name.toLowerCase().includes('astra')
         );
-        const userStoryCol = columns.find(col => 
-          col.name.toLowerCase().includes('user') && col.name.toLowerCase().includes('story') &&
+        const userStoryKeyCol = columns.find(col => 
+          col.name.toLowerCase().includes('user') && 
+          col.name.toLowerCase().includes('story') &&
+          col.name.toLowerCase().includes('key')
+        );
+        const userStoryTitleCol = columns.find(col => 
+          col.name.toLowerCase().includes('user') && 
+          col.name.toLowerCase().includes('story') &&
           col.name.toLowerCase().includes('title')
         );
         
-        if (totalTestCol && astraCol && userStoryCol) {
+        if (totalTestCol && astraCol && (userStoryKeyCol || userStoryTitleCol)) {
           return {
-            type: 'stacked_bar',
-            reason: `Compare total test cases vs ASTRA-created test cases by user story`,
+            type: 'coverage_comparison',
+            reason: `Show ASTRA test case coverage vs total test cases for each user story`,
             columns: { 
-              category: userStoryCol.name,
+              userStoryKey: userStoryKeyCol?.name,
+              userStoryTitle: userStoryTitleCol?.name,
               total: totalTestCol.name,
               astra: astraCol.name,
-              title: `Test Case Coverage Analysis`
+              title: `Test Case Coverage by User Story`
             },
-            confidence: 0.9
+            confidence: 0.95
           };
         }
         break;
@@ -501,40 +511,54 @@ const ChartView = ({ data, tabId }) => {
         };
       }
 
-      case 'stacked_bar': {
-        // For User Story - Test Case Mapping
-        const categoryCol = recommendation.columns.category;
+      case 'coverage_comparison': {
+        // For User Story - Test Case Mapping - Better visualization
+        const userStoryKeyCol = recommendation.columns.userStoryKey;
+        const userStoryTitleCol = recommendation.columns.userStoryTitle;
         const totalCol = recommendation.columns.total;
         const astraCol = recommendation.columns.astra;
         
-        // Take top 15 user stories by total test cases
+        // Sort by total test cases (descending) and take top 15
         const sortedData = [...data]
+          .filter(row => (Number(row[totalCol]) || 0) > 0) // Only show user stories with test cases
           .sort((a, b) => (Number(b[totalCol]) || 0) - (Number(a[totalCol]) || 0))
           .slice(0, 15);
         
+        // Create display names using both key and title
         const categories = sortedData.map(row => {
-          const title = String(row[categoryCol] || 'Unknown');
-          return title.length > 25 ? title.substring(0, 25) + '...' : title;
+          const key = row[userStoryKeyCol] || '';
+          const title = row[userStoryTitleCol] || '';
+          // Use key if available, otherwise use shortened title
+          if (key) {
+            return key;
+          } else if (title) {
+            return title.length > 20 ? title.substring(0, 20) + '...' : title;
+          }
+          return 'Unknown';
         });
         
         const totalValues = sortedData.map(row => Number(row[totalCol]) || 0);
         const astraValues = sortedData.map(row => Number(row[astraCol]) || 0);
-        const remainingValues = totalValues.map((total, i) => Math.max(0, total - astraValues[i]));
+        
+        // Calculate coverage percentages for insights
+        const coveragePercentages = totalValues.map((total, i) => 
+          total > 0 ? ((astraValues[i] / total) * 100).toFixed(1) : 0
+        );
         
         return {
           ...baseConfig,
           title: {
             text: recommendation.columns.title,
-            subtext: `Top ${categories.length} user stories by test case volume`,
+            subtext: `ASTRA Coverage Analysis - Top ${categories.length} User Stories by Test Volume`,
             left: 'center',
             top: 20,
             textStyle: { fontSize: 20, fontWeight: 700, color: '#111827' },
             subtextStyle: { fontSize: 12, color: '#6b7280' }
           },
           legend: {
-            data: ['Created in ASTRA', 'Other Test Cases'],
+            data: ['Total Test Cases', 'Created in ASTRA', 'Coverage %'],
             bottom: 20,
-            itemGap: 20,
+            itemGap: 25,
             textStyle: { fontSize: 11, color: '#4b5563' }
           },
           xAxis: {
@@ -544,23 +568,67 @@ const ChartView = ({ data, tabId }) => {
               rotate: 45,
               fontSize: 10,
               color: '#6b7280',
-              interval: 0
+              interval: 0,
+              formatter: (value) => {
+                return value.length > 15 ? value.substring(0, 15) + '...' : value;
+              }
             },
             axisTick: { alignWithLabel: true },
             axisLine: { lineStyle: { color: '#e5e7eb' } }
           },
-          yAxis: {
-            type: 'value',
-            name: 'Test Cases',
-            nameTextStyle: { fontSize: 12, color: '#6b7280' },
-            axisLabel: { fontSize: 11, color: '#6b7280' },
-            splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } }
-          },
+          yAxis: [
+            {
+              type: 'value',
+              name: 'Number of Test Cases',
+              position: 'left',
+              nameTextStyle: { fontSize: 12, color: '#6b7280', padding: [0, 0, 0, 20] },
+              axisLabel: { fontSize: 11, color: '#6b7280' },
+              splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } },
+              axisLine: { show: false }
+            },
+            {
+              type: 'value',
+              name: 'Coverage %',
+              position: 'right',
+              nameTextStyle: { fontSize: 12, color: '#6b7280', padding: [0, 20, 0, 0] },
+              axisLabel: { 
+                fontSize: 11, 
+                color: '#6b7280',
+                formatter: '{value}%'
+              },
+              splitLine: { show: false },
+              axisLine: { show: false },
+              min: 0,
+              max: 100
+            }
+          ],
           series: [
+            {
+              name: 'Total Test Cases',
+              type: 'bar',
+              yAxisIndex: 0,
+              data: totalValues,
+              itemStyle: {
+                color: {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#e5e7eb' },
+                    { offset: 1, color: '#9ca3af' }
+                  ]
+                },
+                borderRadius: [4, 4, 0, 0],
+                borderWidth: 1,
+                borderColor: '#d1d5db'
+              },
+              emphasis: { itemStyle: { shadowBlur: 10 } },
+              barMaxWidth: 30,
+              z: 1
+            },
             {
               name: 'Created in ASTRA',
               type: 'bar',
-              stack: 'total',
+              yAxisIndex: 0,
               data: astraValues,
               itemStyle: {
                 color: {
@@ -568,32 +636,99 @@ const ChartView = ({ data, tabId }) => {
                   x: 0, y: 0, x2: 0, y2: 1,
                   colorStops: [
                     { offset: 0, color: '#10b981' },
-                    { offset: 1, color: '#10b981dd' }
+                    { offset: 1, color: '#059669' }
                   ]
                 },
-                borderRadius: [0, 0, 0, 0]
+                borderRadius: [4, 4, 0, 0],
+                shadowColor: 'rgba(16, 185, 129, 0.3)',
+                shadowBlur: 8,
+                shadowOffsetY: 4
               },
-              emphasis: { itemStyle: { shadowBlur: 10 } }
+              emphasis: { 
+                itemStyle: { 
+                  shadowBlur: 15,
+                  shadowOffsetY: 8,
+                  scale: 1.02
+                } 
+              },
+              barMaxWidth: 30,
+              z: 2,
+              label: {
+                show: true,
+                position: 'top',
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#059669',
+                formatter: '{c}'
+              }
             },
             {
-              name: 'Other Test Cases',
-              type: 'bar',
-              stack: 'total',
-              data: remainingValues,
-              itemStyle: {
-                color: {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: '#f59e0b' },
-                    { offset: 1, color: '#f59e0bdd' }
-                  ]
-                },
-                borderRadius: [4, 4, 0, 0]
+              name: 'Coverage %',
+              type: 'line',
+              yAxisIndex: 1,
+              data: coveragePercentages,
+              lineStyle: {
+                width: 3,
+                color: '#f59e0b',
+                type: 'solid'
               },
-              emphasis: { itemStyle: { shadowBlur: 10 } }
+              itemStyle: {
+                color: '#f59e0b',
+                borderColor: '#ffffff',
+                borderWidth: 2
+              },
+              symbol: 'circle',
+              symbolSize: 8,
+              label: {
+                show: true,
+                position: 'top',
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#f59e0b',
+                formatter: '{c}%'
+              },
+              emphasis: {
+                itemStyle: {
+                  borderWidth: 4,
+                  shadowBlur: 15,
+                  shadowColor: '#f59e0b60'
+                }
+              },
+              z: 3
             }
-          ]
+          ],
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'cross',
+              crossStyle: { color: '#999' }
+            },
+            formatter: function(params) {
+              const userStoryKey = params[0].name;
+              const totalTests = params[0].value;
+              const astraTests = params[1].value;
+              const coverage = params[2].value;
+              
+              return `
+                <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937;">${userStoryKey}</div>
+                <div style="margin-bottom: 4px;">
+                  <span style="display: inline-block; width: 8px; height: 8px; background: #9ca3af; border-radius: 50%; margin-right: 8px;"></span>
+                  Total Test Cases: <strong>${totalTests}</strong>
+                </div>
+                <div style="margin-bottom: 4px;">
+                  <span style="display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 8px;"></span>
+                  Created in ASTRA: <strong>${astraTests}</strong>
+                </div>
+                <div style="margin-bottom: 4px;">
+                  <span style="display: inline-block; width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; margin-right: 8px;"></span>
+                  Coverage: <strong>${coverage}%</strong>
+                </div>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280;">
+                  Gap: ${totalTests - astraTests} test cases
+                </div>
+              `;
+            }
+          }
         };
       }
 
