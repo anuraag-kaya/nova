@@ -115,10 +115,11 @@ const ChartView = ({ data, tabId }) => {
       return 'unmapped_test_cases';
     }
     
-    // Scenario 2: User Story - Test Case Mapping
+    // Scenario 2: User Story - Test Case Mapping (ENHANCED DETECTION)
     if (lowerColumns.some(col => col.includes('user') && col.includes('story')) &&
-        lowerColumns.some(col => col.includes('total') && col.includes('test')) &&
-        lowerColumns.some(col => col.includes('astra'))) {
+        (lowerColumns.some(col => col.includes('total') && col.includes('test')) ||
+         lowerColumns.some(col => col.includes('astra')) ||
+         lowerColumns.some(col => col.includes('created') && (col.includes('astra') || col.includes('automated'))))) {
       return 'user_story_mapping';
     }
     
@@ -164,7 +165,9 @@ const ChartView = ({ data, tabId }) => {
           col.name.toLowerCase().includes('total') && col.name.toLowerCase().includes('test')
         );
         const astraCol = analysis.columns.find(col => 
-          col.name.toLowerCase().includes('astra')
+          col.name.toLowerCase().includes('astra') || 
+          (col.name.toLowerCase().includes('created') && 
+           (col.name.toLowerCase().includes('astra') || col.name.toLowerCase().includes('automated')))
         );
         if (totalTestCol && astraCol) {
           const totalSum = totalTestCol.statistics.sum || 0;
@@ -254,25 +257,42 @@ const ChartView = ({ data, tabId }) => {
         break;
         
       case 'user_story_mapping':
-        const totalTestCol = columns.find(col => 
-          col.name.toLowerCase().includes('total') && 
-          col.name.toLowerCase().includes('test') &&
-          !col.name.toLowerCase().includes('astra')
-        );
-        const astraCol = columns.find(col => 
-          col.name.toLowerCase().includes('astra') || 
-          col.name.toLowerCase().includes('created') && col.name.toLowerCase().includes('astra')
-        );
-        const userStoryKeyCol = columns.find(col => 
-          col.name.toLowerCase().includes('user') && 
-          col.name.toLowerCase().includes('story') &&
-          col.name.toLowerCase().includes('key')
-        );
-        const userStoryTitleCol = columns.find(col => 
-          col.name.toLowerCase().includes('user') && 
-          col.name.toLowerCase().includes('story') &&
-          col.name.toLowerCase().includes('title')
-        );
+        // ENHANCED COLUMN DETECTION FOR USER STORY MAPPING
+        const totalTestCol = columns.find(col => {
+          const lower = col.name.toLowerCase();
+          return (lower.includes('total') && lower.includes('test')) ||
+                 (lower.includes('test') && lower.includes('case') && lower.includes('count')) ||
+                 (col.type === 'integer' && lower.includes('test'));
+        });
+        
+        const astraCol = columns.find(col => {
+          const lower = col.name.toLowerCase();
+          return lower.includes('astra') || 
+                 (lower.includes('created') && (lower.includes('astra') || lower.includes('automated'))) ||
+                 (lower.includes('ai') && lower.includes('generated')) ||
+                 (lower.includes('automated') && col.type === 'integer');
+        });
+        
+        const userStoryKeyCol = columns.find(col => {
+          const lower = col.name.toLowerCase();
+          return (lower.includes('user') && lower.includes('story') && lower.includes('key')) ||
+                 (lower.includes('us') && lower.includes('key')) ||
+                 (lower.includes('story') && lower.includes('id'));
+        });
+        
+        const userStoryTitleCol = columns.find(col => {
+          const lower = col.name.toLowerCase();
+          return (lower.includes('user') && lower.includes('story') && (lower.includes('title') || lower.includes('summary'))) ||
+                 (lower.includes('story') && lower.includes('title')) ||
+                 (lower.includes('us') && lower.includes('title'));
+        });
+        
+        console.log('User Story Mapping Detection:', {
+          totalTestCol: totalTestCol?.name,
+          astraCol: astraCol?.name,
+          userStoryKeyCol: userStoryKeyCol?.name,
+          userStoryTitleCol: userStoryTitleCol?.name
+        });
         
         if (totalTestCol && astraCol && (userStoryKeyCol || userStoryTitleCol)) {
           return {
@@ -286,6 +306,23 @@ const ChartView = ({ data, tabId }) => {
               title: `Test Case Coverage by User Story`
             },
             confidence: 0.95
+          };
+        }
+        
+        // FALLBACK: If we can't find perfect columns, use first numeric columns
+        const numericCols = columns.filter(col => col.type === 'integer' || col.type === 'numeric');
+        if (numericCols.length >= 2) {
+          return {
+            type: 'coverage_comparison',
+            reason: `Fallback: Show comparison between numeric columns`,
+            columns: { 
+              userStoryKey: userStoryKeyCol?.name || columns.find(col => col.type === 'categorical')?.name,
+              userStoryTitle: userStoryTitleCol?.name,
+              total: numericCols[0].name,
+              astra: numericCols[1].name,
+              title: `Data Comparison`
+            },
+            confidence: 0.7
           };
         }
         break;
@@ -512,29 +549,66 @@ const ChartView = ({ data, tabId }) => {
       }
 
       case 'coverage_comparison': {
-        // For User Story - Test Case Mapping - Better visualization
+        // FIXED USER STORY - TEST CASE MAPPING VISUALIZATION
         const userStoryKeyCol = recommendation.columns.userStoryKey;
         const userStoryTitleCol = recommendation.columns.userStoryTitle;
         const totalCol = recommendation.columns.total;
         const astraCol = recommendation.columns.astra;
         
+        console.log('Coverage Chart Data:', {
+          userStoryKeyCol,
+          userStoryTitleCol,
+          totalCol,
+          astraCol,
+          dataLength: data.length,
+          sampleData: data.slice(0, 3)
+        });
+        
+        // ENHANCED DATA FILTERING AND PROCESSING
+        const validData = data.filter(row => {
+          const totalValue = Number(row[totalCol]);
+          const astraValue = Number(row[astraCol]);
+          
+          // Include rows with at least one test case
+          return !isNaN(totalValue) && !isNaN(astraValue) && totalValue >= 0 && astraValue >= 0;
+        });
+        
+        console.log('Valid data after filtering:', validData.length);
+        
+        if (validData.length === 0) {
+          // FALLBACK: Show raw data if no valid numeric data found
+          return {
+            ...baseConfig,
+            title: {
+              text: 'No Valid Data Found',
+              subtext: 'Cannot generate coverage chart with current data',
+              left: 'center',
+              top: 20,
+              textStyle: { fontSize: 18, color: '#dc2626' }
+            },
+            series: []
+          };
+        }
+        
         // Sort by total test cases (descending) and take top 15
-        const sortedData = [...data]
-          .filter(row => (Number(row[totalCol]) || 0) > 0) // Only show user stories with test cases
+        const sortedData = validData
           .sort((a, b) => (Number(b[totalCol]) || 0) - (Number(a[totalCol]) || 0))
           .slice(0, 15);
         
         // Create display names using both key and title
-        const categories = sortedData.map(row => {
+        const categories = sortedData.map((row, index) => {
           const key = row[userStoryKeyCol] || '';
           const title = row[userStoryTitleCol] || '';
-          // Use key if available, otherwise use shortened title
-          if (key) {
-            return key;
-          } else if (title) {
-            return title.length > 20 ? title.substring(0, 20) + '...' : title;
+          
+          // Use key if available, otherwise use shortened title, otherwise use index
+          if (key && key !== '' && key !== 'null' && key !== null) {
+            return String(key);
+          } else if (title && title !== '' && title !== 'null' && title !== null) {
+            const titleStr = String(title);
+            return titleStr.length > 20 ? titleStr.substring(0, 20) + '...' : titleStr;
+          } else {
+            return `Story ${index + 1}`;
           }
-          return 'Unknown';
         });
         
         const totalValues = sortedData.map(row => Number(row[totalCol]) || 0);
@@ -542,8 +616,15 @@ const ChartView = ({ data, tabId }) => {
         
         // Calculate coverage percentages for insights
         const coveragePercentages = totalValues.map((total, i) => 
-          total > 0 ? ((astraValues[i] / total) * 100).toFixed(1) : 0
+          total > 0 ? Number(((astraValues[i] / total) * 100).toFixed(1)) : 0
         );
+        
+        console.log('Chart data prepared:', {
+          categories: categories.length,
+          totalValues: totalValues.length,
+          astraValues: astraValues.length,
+          coveragePercentages: coveragePercentages.length
+        });
         
         return {
           ...baseConfig,
@@ -849,6 +930,12 @@ const ChartView = ({ data, tabId }) => {
     setTimeout(() => {
       const analysis = analyzeTableData(data);
       const config = generateChartConfiguration(analysis, analysis?.chartRecommendation);
+      
+      console.log('Analysis complete:', {
+        scenario: analysis?.scenario,
+        recommendation: analysis?.chartRecommendation,
+        hasConfig: !!config
+      });
       
       setDataAnalysis(analysis);
       setChartConfig(config);
