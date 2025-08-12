@@ -68,9 +68,6 @@ export default function ChatBot() {
     }
   ]);
 
-  // Removed click outside to close functionality
-  // Modal only closes via close button or floating button click
-
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -164,6 +161,44 @@ export default function ChatBot() {
 
   return (
     <>
+      {/* Custom Styles */}
+      <style jsx>{`
+        .custom-textarea {
+          resize: none;
+          /* Remove default scrollbars and arrows */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        
+        .custom-textarea::-webkit-scrollbar {
+          width: 3px;
+        }
+        
+        .custom-textarea::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .custom-textarea::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 1.5px;
+        }
+        
+        .custom-textarea::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+        
+        /* Remove spin buttons for number inputs and textareas */
+        .custom-textarea::-webkit-outer-spin-button,
+        .custom-textarea::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        
+        .custom-textarea {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
       {/* Main Chat Modal */}
       <div
         ref={widgetRef}
@@ -348,31 +383,34 @@ export default function ChatBot() {
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
                       placeholder="Ask me anything about ASTRA..."
-                      className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 pr-4 focus:outline-none focus:ring-2 focus:ring-[#0057e7] focus:border-[#0057e7] transition-all duration-200"
+                      className="custom-textarea w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0057e7] focus:border-[#0057e7] transition-all duration-200"
                       rows={1}
                       style={{ minHeight: '48px', maxHeight: '120px' }}
                     />
                   </div>
                   
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!message.trim() || isTyping}
-                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                      message.trim() && !isTyping
-                        ? 'bg-[#0057e7] hover:bg-[#0046b8] text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {isTyping ? (
-                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                    )}
-                  </button>
+                  <div className="flex-shrink-0 flex items-end">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!message.trim() || isTyping}
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                        message.trim() && !isTyping
+                          ? 'bg-[#0057e7] hover:bg-[#0046b8] text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                      style={{ minHeight: '48px' }}
+                    >
+                      {isTyping ? (
+                        <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -390,7 +428,7 @@ export default function ChatBot() {
             isOpen ? 'w-14 h-14' : 'w-14 h-14 hover:scale-110'
           }`}
         >
-          {/* Animated Icon */}
+          {/* Robot/AI Assistant Icon */}
           <div className={`transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`}>
             {isOpen ? (
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,12 +436,12 @@ export default function ChatBot() {
               </svg>
             ) : (
               <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                <circle cx="12" cy="8" r="1" fill="white"/>
-                <circle cx="16" cy="12" r="0.8" fill="white" opacity="0.8"/>
-                <circle cx="8" cy="14" r="0.6" fill="white" opacity="0.6"/>
-                <circle cx="15" cy="16" r="0.4" fill="white" opacity="0.4"/>
-                <path d="M12 10l1 1-1 1-1-1z" fill="white" opacity="0.9"/>
+                <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7v1a3 3 0 01-3 3v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-1a3 3 0 01-3-3v-1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2z"/>
+                <circle cx="8.5" cy="10.5" r="1.5" fill="white"/>
+                <circle cx="15.5" cy="10.5" r="1.5" fill="white"/>
+                <path d="M9 14h6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="12" cy="4" r="1" fill="white" opacity="0.8"/>
+                <rect x="11" y="1" width="2" height="1" rx="0.5" fill="white" opacity="0.6"/>
               </svg>
             )}
           </div>
