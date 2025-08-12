@@ -68,22 +68,8 @@ export default function ChatBot() {
     }
   ]);
 
-  // Close widget when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (widgetRef.current && !widgetRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
+  // Removed click outside to close functionality
+  // Modal only closes via close button or floating button click
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -192,12 +178,12 @@ export default function ChatBot() {
               : "scale-95 translate-y-4"
           }`}
           style={{ 
-            width: "62vw", 
-            height: "75vh",
-            maxWidth: "1000px",
-            minWidth: "800px",
-            maxHeight: "600px",
-            minHeight: "500px"
+            width: "80vw", 
+            height: "85vh",
+            maxWidth: "1400px",
+            minWidth: "1000px",
+            maxHeight: "800px",
+            minHeight: "650px"
           }}
         >
           <div className="flex h-full">
@@ -354,7 +340,7 @@ export default function ChatBot() {
 
               {/* Input Area */}
               <div className="border-t border-gray-200 bg-white p-4">
-                <form onSubmit={handleSubmit} className="flex items-end gap-3">
+                <div className="flex items-end gap-3">
                   <div className="flex-1 relative">
                     <textarea
                       ref={textareaRef}
@@ -369,7 +355,7 @@ export default function ChatBot() {
                   </div>
                   
                   <button
-                    type="submit"
+                    onClick={handleSubmit}
                     disabled={!message.trim() || isTyping}
                     className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
                       message.trim() && !isTyping
@@ -387,7 +373,7 @@ export default function ChatBot() {
                       </svg>
                     )}
                   </button>
-                </form>
+                </div>
               </div>
             </div>
           </div>
@@ -411,8 +397,13 @@ export default function ChatBot() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
             ) : (
-              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                <circle cx="12" cy="8" r="1" fill="white"/>
+                <circle cx="16" cy="12" r="0.8" fill="white" opacity="0.8"/>
+                <circle cx="8" cy="14" r="0.6" fill="white" opacity="0.6"/>
+                <circle cx="15" cy="16" r="0.4" fill="white" opacity="0.4"/>
+                <path d="M12 10l1 1-1 1-1-1z" fill="white" opacity="0.9"/>
               </svg>
             )}
           </div>
