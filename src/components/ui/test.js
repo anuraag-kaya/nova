@@ -428,21 +428,17 @@ export default function ChatBot() {
             isOpen ? 'w-14 h-14' : 'w-14 h-14 hover:scale-110'
           }`}
         >
-          {/* Robot/AI Assistant Icon */}
+          {/* AI Assistant Icon */}
           <div className={`transition-all duration-300 ${isOpen ? 'rotate-180' : ''}`}>
             {isOpen ? (
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
             ) : (
-              <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7v1a3 3 0 01-3 3v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-1a3 3 0 01-3-3v-1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2z"/>
-                <circle cx="8.5" cy="10.5" r="1.5" fill="white"/>
-                <circle cx="15.5" cy="10.5" r="1.5" fill="white"/>
-                <path d="M9 14h6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-                <circle cx="12" cy="4" r="1" fill="white" opacity="0.8"/>
-                <rect x="11" y="1" width="2" height="1" rx="0.5" fill="white" opacity="0.6"/>
-              </svg>
+              <div className="flex items-center justify-center">
+                <span className="text-lg font-bold text-white">AI</span>
+                <span className="text-sm ml-0.5">✨</span>
+              </div>
             )}
           </div>
           
