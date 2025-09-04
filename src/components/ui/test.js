@@ -458,7 +458,7 @@ const TeamTracker = () => {
         {/* Empty State */}
         {!teamData && !loadingData && (
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <TrendingUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <div className="text-4xl mb-4">📊</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Track Team Activity</h3>
             <p className="text-gray-500 mb-6">
               Select a project and release, then click "Fetch Data" to view test case creation metrics.
