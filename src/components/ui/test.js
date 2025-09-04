@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChevronDownIcon, CalendarIcon, UsersIcon, TrendingUpIcon } from '@heroicons/react/24/outline';
 
 const TeamTracker = () => {
   // Core state
@@ -212,7 +211,7 @@ const TeamTracker = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
               <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg">
-                <UsersIcon className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-600">👥</span>
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Team Tracker</h1>
@@ -259,7 +258,7 @@ const TeamTracker = () => {
                   <span className={selectedProject ? 'text-gray-900' : 'text-gray-500'}>
                     {loadingProjects ? 'Loading projects...' : selectedProject?.name || 'Choose a project'}
                   </span>
-                  <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
+                  <span className={`text-gray-400 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
                 </button>
                 
                 {projectDropdownOpen && !loadingProjects && (
@@ -297,7 +296,7 @@ const TeamTracker = () => {
                   <span className={selectedRelease ? 'text-gray-900' : 'text-gray-500'}>
                     {loadingReleases ? 'Loading releases...' : selectedRelease?.name || 'Choose a release'}
                   </span>
-                  <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${releaseDropdownOpen ? 'rotate-180' : ''}`} />
+                  <span className={`text-gray-400 transition-transform ${releaseDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
                 </button>
                 
                 {releaseDropdownOpen && !loadingReleases && releases.length > 0 && (
@@ -382,7 +381,7 @@ const TeamTracker = () => {
                   Test Case Creation Activity
                 </h3>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <CalendarIcon className="w-4 h-4" />
+                  <span>📅</span>
                   <span>
                     {viewMode === 'daily' ? 'Last 16 days' : 'Last 13 weeks'}
                   </span>
@@ -471,6 +470,21 @@ const TeamTracker = () => {
               <div className="w-2 h-2 bg-purple-400 rounded-full ml-4"></div>
               <span>8+ test cases</span>
             </div>
+          </div>
+        )}
+
+        {/* No Data State */}
+        {teamData && teamData.length === 0 && (
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <div className="text-4xl mb-4">📭</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+            <p className="text-gray-500 mb-4">
+              No test case creation data found for the selected project and release.
+            </p>
+            <p className="text-sm text-gray-400">
+              Project: <span className="font-medium">{selectedProject?.name}</span><br/>
+              Release: <span className="font-medium">{selectedRelease?.name}</span>
+            </p>
           </div>
         )}
       </div>
