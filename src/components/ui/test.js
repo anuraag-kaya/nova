@@ -390,45 +390,51 @@ const ProgressInsights = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header Controls */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Release Progress Insights</h2>
-        
+      {/* Header Section - Release Progress Insights */}
+      <div className="bg-white border-b border-gray-200 shadow-sm px-6 py-4 mb-2">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center">
+          <span className="mr-2">📈</span>
+          Release Progress Insights
+        </h2>
+      </div>
+
+      {/* Control Box */}
+      <div className="bg-white rounded-lg shadow-md p-6 mx-6 mb-6">
         <div className="flex items-center gap-4">
-          <div className="flex items-center text-gray-600 text-sm">
-            <span className="font-medium">Projects:</span>
-          </div>
-          
           {/* Project Dropdown */}
-          <div ref={dropdownRef} className="relative w-96">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Select a project..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedProject(null);
-                    setShowDropdown(true);
-                  }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
+          <div ref={dropdownRef} className="relative flex-1">
+            <div className="flex items-center">
+              <span className="text-gray-600 text-sm font-medium mr-3">Projects</span>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Select a project..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedProject(null);
+                      setShowDropdown(true);
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             
             {/* Dropdown Menu */}
             {showDropdown && (
-              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto z-50">
+              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto z-50" 
+                   style={{ left: '0', marginLeft: '80px', width: 'calc(100% - 80px)' }}>
                 {filteredProjects.length > 0 ? (
                   filteredProjects.map((project) => (
                     <div
@@ -453,19 +459,19 @@ const ProgressInsights = () => {
           <button
             onClick={handleInsightClick}
             disabled={!selectedProject || loading}
-            className={`px-6 py-2 rounded-md font-medium transition-all ${
+            className={`px-8 py-2.5 rounded-full font-bold text-sm tracking-wide transition-all min-w-[120px] ${
               selectedProject && !loading
-                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'
+                ? 'bg-[#1E88E5] text-white hover:bg-[#1976D2] shadow-md hover:shadow-lg'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
             {loading ? (
-              <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+              <div className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Loading...
+                <span>Loading...</span>
               </div>
             ) : (
               'Insight'
@@ -476,7 +482,7 @@ const ProgressInsights = () => {
 
       {/* Charts Grid */}
       {chartsData.userStories && chartsData.testCases && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6">
           {/* User Stories Chart */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div ref={userStoriesChartRef} style={{ width: '100%', height: '400px' }} />
@@ -501,7 +507,7 @@ const ProgressInsights = () => {
 
       {/* Empty State */}
       {!chartsData.userStories && !chartsData.testCases && !loading && (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+        <div className="bg-white rounded-lg shadow-md p-12 mx-6 text-center">
           <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
