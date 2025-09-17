@@ -1,506 +1,515 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as echarts from 'echarts';
 
-const TeamTracker = () => {
-  // Core state
+const ProgressInsights = () => {
   const [projects, setProjects] = useState([]);
-  const [releases, setReleases] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [selectedRelease, setSelectedRelease] = useState(null);
-  const [viewMode, setViewMode] = useState('weekly'); // 'weekly' | 'daily'
-  const [teamData, setTeamData] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [chartsData, setChartsData] = useState({
+    userStories: null,
+    testCases: null
+  });
   
-  // Loading states
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [loadingReleases, setLoadingReleases] = useState(false);
-  const [loadingData, setLoadingData] = useState(false);
-  
-  // UI state
-  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
-  const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const userStoriesChartRef = useRef(null);
+  const testCasesChartRef = useRef(null);
+  const growthChartRef = useRef(null);
+  const comparisonChartRef = useRef(null);
 
-  // Generate date columns based on view mode
-  const dateColumns = useMemo(() => {
-    const today = new Date();
-    const columns = [];
-    
-    if (viewMode === 'daily') {
-      // Last 16 days including today
-      for (let i = 0; i < 16; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i);
-        columns.push({
-          key: `day-${i}`,
-          label: date.toLocaleDateString('en-US', { 
-            weekday: 'short', 
-            day: '2-digit', 
-            month: 'short' 
-          }),
-          fullDate: date.toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }),
-          dateKey: date.toISOString().split('T')[0]
-        });
-      }
-    } else {
-      // Last 13 weeks including current week
-      for (let i = 0; i < 13; i++) {
-        const weekStart = new Date(today);
-        const dayOfWeek = today.getDay();
-        const diff = today.getDate() - dayOfWeek - (i * 7);
-        weekStart.setDate(diff);
-        
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        
-        columns.push({
-          key: `week-${i}`,
-          label: `Week of ${weekStart.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })}`,
-          fullDate: `${weekStart.toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric' 
-          })} - ${weekEnd.toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric', 
-            year: 'numeric' 
-          })}`,
-          dateKey: `${weekStart.toISOString().split('T')[0]}_${weekEnd.toISOString().split('T')[0]}`
-        });
-      }
-    }
-    
-    return columns;
-  }, [viewMode]);
-
-  // Mock API calls - Replace with actual API endpoints
-  const fetchProjects = useCallback(async () => {
-    setLoadingProjects(true);
-    try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Mock data
-      const mockProjects = Array.from({ length: 45 }, (_, i) => ({
-        id: `proj-${i + 1}`,
-        name: `Project ${String.fromCharCode(65 + (i % 26))}${Math.floor(i / 26) + 1}`,
-        description: `Enterprise project for team ${i + 1}`
-      }));
-      
-      setProjects(mockProjects);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
-    } finally {
-      setLoadingProjects(false);
-    }
-  }, []);
-
-  const fetchReleases = useCallback(async (projectId) => {
-    if (!projectId) return;
-    
-    setLoadingReleases(true);
-    setSelectedRelease(null);
-    setReleases([]);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      
-      const mockReleases = Array.from({ length: 8 }, (_, i) => ({
-        id: `rel-${projectId}-${i + 1}`,
-        name: `Release ${projectId.split('-')[1]}.${i + 1}`,
-        version: `v${i + 1}.0.0`,
-        status: i === 0 ? 'current' : 'completed'
-      }));
-      
-      setReleases(mockReleases);
-    } catch (error) {
-      console.error('Failed to fetch releases:', error);
-    } finally {
-      setLoadingReleases(false);
-    }
-  }, []);
-
-  const fetchTeamData = useCallback(async () => {
-    if (!selectedProject || !selectedRelease) return;
-    
-    setLoadingData(true);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      
-      // Generate mock team data
-      const mockUsers = [
-        { id: 'u1', created_user: 'sarah.chen', full_name: 'Sarah Chen' },
-        { id: 'u2', created_user: 'mike.rodriguez', full_name: 'Mike Rodriguez' },
-        { id: 'u3', created_user: 'priya.patel', full_name: 'Priya Patel' },
-        { id: 'u4', created_user: 'david.kim', full_name: 'David Kim' },
-        { id: 'u5', created_user: 'anna.mueller', full_name: 'Anna Mueller' },
-        { id: 'u6', created_user: 'james.wilson', full_name: 'James Wilson' },
-        { id: 'u7', created_user: 'lisa.zhang', full_name: 'Lisa Zhang' },
-        { id: 'u8', created_user: 'alex.thompson', full_name: 'Alex Thompson' }
-      ];
-      
-      const teamDataWithCounts = mockUsers.map(user => {
-        const userData = { ...user };
-        dateColumns.forEach(col => {
-          // Generate realistic test case counts (0-15, weighted toward lower numbers)
-          const rand = Math.random();
-          let count = 0;
-          if (rand > 0.3) count = Math.floor(Math.random() * 6); // 0-5
-          if (rand > 0.7) count = Math.floor(Math.random() * 10); // 0-9
-          if (rand > 0.9) count = Math.floor(Math.random() * 15); // 0-14
-          
-          userData[col.dateKey] = count;
-        });
-        return userData;
-      });
-      
-      setTeamData(teamDataWithCounts);
-    } catch (error) {
-      console.error('Failed to fetch team data:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  }, [selectedProject, selectedRelease, dateColumns]);
-
-  // Initialize projects on mount
+  // Fetch projects on component mount
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+  }, []);
 
-  // Fetch releases when project changes
+  // Handle click outside dropdown
   useEffect(() => {
-    if (selectedProject) {
-      fetchReleases(selectedProject.id);
-    }
-  }, [selectedProject, fetchReleases]);
-
-  // Calculate totals for summary
-  const summaryStats = useMemo(() => {
-    if (!teamData || teamData.length === 0) return null;
-    
-    const totalTests = teamData.reduce((sum, user) => {
-      return sum + dateColumns.reduce((userSum, col) => {
-        return userSum + (user[col.dateKey] || 0);
-      }, 0);
-    }, 0);
-    
-    const activeUsers = teamData.filter(user => {
-      return dateColumns.some(col => (user[col.dateKey] || 0) > 0);
-    }).length;
-    
-    const avgPerUser = activeUsers > 0 ? Math.round(totalTests / activeUsers) : 0;
-    
-    return {
-      totalTests,
-      activeUsers,
-      avgPerUser,
-      period: viewMode === 'daily' ? '16 days' : '13 weeks'
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
     };
-  }, [teamData, dateColumns, viewMode]);
 
-  const canFetchData = selectedProject && selectedRelease;
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/release-insights/project', {
+        headers: {
+          'x-user-soeid': 'x-user-soeid' // Replace with actual user ID
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const handleProjectSelect = (project) => {
+    setSelectedProject(project);
+    setShowDropdown(false);
+    setSearchTerm(project.name);
+  };
+
+  const handleInsightClick = async () => {
+    if (!selectedProject) return;
+    
+    setLoading(true);
+    try {
+      // Fetch user stories data
+      const userStoriesResponse = await fetch(`/api/us-by-release?project_id=${selectedProject.id}`, {
+        headers: {
+          'x-user-soeid': 'x-user-soeid'
+        }
+      });
+      
+      // Fetch test cases data
+      const testCasesResponse = await fetch(`/api/tc-by-release?project_id=${selectedProject.id}`, {
+        headers: {
+          'x-user-soeid': 'x-user-soeid'
+        }
+      });
+      
+      if (userStoriesResponse.ok && testCasesResponse.ok) {
+        const userStoriesData = await userStoriesResponse.json();
+        const testCasesData = await testCasesResponse.json();
+        
+        setChartsData({
+          userStories: userStoriesData.data,
+          testCases: testCasesData.data
+        });
+        
+        // Initialize charts after data is loaded
+        setTimeout(() => {
+          initializeCharts(userStoriesData.data, testCasesData.data);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error fetching insights data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeCharts = (userStoriesData, testCasesData) => {
+    // User Stories Trend Chart
+    if (userStoriesChartRef.current) {
+      const chart = echarts.init(userStoriesChartRef.current);
+      const option = {
+        title: {
+          text: 'User Stories by Release',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: function(params) {
+            const data = params[0];
+            return `
+              <div style="padding: 10px;">
+                <strong>${data.name}</strong><br/>
+                Story Count: ${data.value}<br/>
+                ${data.data.percent_diff !== null ? `Change: ${data.data.percent_diff > 0 ? '+' : ''}${data.data.percent_diff}%` : ''}
+              </div>
+            `;
+          }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: userStoriesData.map(item => item.release_name),
+          axisLabel: {
+            rotate: 45,
+            fontSize: 11
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Story Count',
+          nameLocation: 'middle',
+          nameGap: 40
+        },
+        series: [{
+          name: 'User Stories',
+          type: 'line',
+          smooth: true,
+          data: userStoriesData.map(item => ({
+            value: item.story_count,
+            data: item
+          })),
+          lineStyle: {
+            width: 3,
+            color: '#0057e7'
+          },
+          itemStyle: {
+            color: '#0057e7',
+            borderWidth: 2
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+              offset: 0,
+              color: 'rgba(0, 87, 231, 0.3)'
+            }, {
+              offset: 1,
+              color: 'rgba(0, 87, 231, 0.05)'
+            }])
+          }
+        }]
+      };
+      chart.setOption(option);
+    }
+
+    // Test Cases Trend Chart
+    if (testCasesChartRef.current) {
+      const chart = echarts.init(testCasesChartRef.current);
+      const option = {
+        title: {
+          text: 'Test Cases by Release',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: function(params) {
+            const data = params[0];
+            return `
+              <div style="padding: 10px;">
+                <strong>${data.name}</strong><br/>
+                Test Cases: ${data.value}<br/>
+                ${data.data.percent_diff !== null ? `Change: ${data.data.percent_diff > 0 ? '+' : ''}${data.data.percent_diff}%` : ''}
+              </div>
+            `;
+          }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: testCasesData.map(item => item.release_name),
+          axisLabel: {
+            rotate: 45,
+            fontSize: 11
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Test Case Count',
+          nameLocation: 'middle',
+          nameGap: 40
+        },
+        series: [{
+          name: 'Test Cases',
+          type: 'line',
+          smooth: true,
+          data: testCasesData.map(item => ({
+            value: item.test_case_count,
+            data: item
+          })),
+          lineStyle: {
+            width: 3,
+            color: '#34a853'
+          },
+          itemStyle: {
+            color: '#34a853',
+            borderWidth: 2
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+              offset: 0,
+              color: 'rgba(52, 168, 83, 0.3)'
+            }, {
+              offset: 1,
+              color: 'rgba(52, 168, 83, 0.05)'
+            }])
+          }
+        }]
+      };
+      chart.setOption(option);
+    }
+
+    // Growth Percentage Chart
+    if (growthChartRef.current) {
+      const chart = echarts.init(growthChartRef.current);
+      const percentData = userStoriesData.filter(item => item.percent_diff !== null);
+      
+      const option = {
+        title: {
+          text: 'Growth Rate Analysis',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: '{b}: {c}%'
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: percentData.map(item => item.release_name),
+          axisLabel: {
+            rotate: 45,
+            fontSize: 11
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Growth %',
+          nameLocation: 'middle',
+          nameGap: 40,
+          axisLabel: {
+            formatter: '{value}%'
+          }
+        },
+        series: [{
+          name: 'Growth Rate',
+          type: 'bar',
+          data: percentData.map(item => ({
+            value: item.percent_diff,
+            itemStyle: {
+              color: item.percent_diff > 0 ? '#34a853' : '#ea4335'
+            }
+          })),
+          label: {
+            show: true,
+            position: 'top',
+            formatter: '{c}%'
+          }
+        }]
+      };
+      chart.setOption(option);
+    }
+
+    // Comparison Chart
+    if (comparisonChartRef.current) {
+      const chart = echarts.init(comparisonChartRef.current);
+      const option = {
+        title: {
+          text: 'User Stories vs Test Cases',
+          left: 'center',
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'cross'
+          }
+        },
+        legend: {
+          data: ['User Stories', 'Test Cases'],
+          top: '10%'
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          top: '20%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: userStoriesData.map(item => item.release_name),
+          axisLabel: {
+            rotate: 45,
+            fontSize: 11
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Count',
+          nameLocation: 'middle',
+          nameGap: 40
+        },
+        series: [
+          {
+            name: 'User Stories',
+            type: 'bar',
+            data: userStoriesData.map(item => item.story_count),
+            itemStyle: {
+              color: '#0057e7'
+            }
+          },
+          {
+            name: 'Test Cases',
+            type: 'bar',
+            data: testCasesData.map(item => item.test_case_count),
+            itemStyle: {
+              color: '#34a853'
+            }
+          }
+        ]
+      };
+      chart.setOption(option);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      userStoriesChartRef.current && echarts.getInstanceByDom(userStoriesChartRef.current)?.resize();
+      testCasesChartRef.current && echarts.getInstanceByDom(testCasesChartRef.current)?.resize();
+      growthChartRef.current && echarts.getInstanceByDom(growthChartRef.current)?.resize();
+      comparisonChartRef.current && echarts.getInstanceByDom(comparisonChartRef.current)?.resize();
+    });
+  };
+
+  const filteredProjects = projects.filter(project =>
+    project.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg">
-                <span className="text-blue-600">👥</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">Team Tracker</h1>
-                <p className="text-sm text-gray-500">Test case creation activity by team members</p>
-              </div>
+      {/* Header Controls */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Release Progress Insights</h2>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center text-gray-600 text-sm">
+            <span className="font-medium">Projects:</span>
+          </div>
+          
+          {/* Project Dropdown */}
+          <div ref={dropdownRef} className="relative w-96">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Select a project..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedProject(null);
+                    setShowDropdown(true);
+                  }}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
             
-            {summaryStats && (
-              <div className="flex items-center space-x-6 text-sm">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{summaryStats.totalTests}</div>
-                  <div className="text-gray-500">Total Tests</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{summaryStats.activeUsers}</div>
-                  <div className="text-gray-500">Active Users</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{summaryStats.avgPerUser}</div>
-                  <div className="text-gray-500">Avg per User</div>
-                </div>
+            {/* Dropdown Menu */}
+            {showDropdown && (
+              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto z-50">
+                {filteredProjects.length > 0 ? (
+                  filteredProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      onClick={() => handleProjectSelect(project)}
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-gray-900">{project.name}</div>
+                      {project.zephyr_project_name && (
+                        <div className="text-sm text-gray-500">{project.zephyr_project_name}</div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-4 py-3 text-gray-500 text-center">No projects found</div>
+                )}
               </div>
             )}
           </div>
+
+          {/* Insight Button */}
+          <button
+            onClick={handleInsightClick}
+            disabled={!selectedProject || loading}
+            className={`px-6 py-2 rounded-md font-medium transition-all ${
+              selectedProject && !loading
+                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {loading ? (
+              <div className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Loading...
+              </div>
+            ) : (
+              'Insight'
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            
-            {/* Project Dropdown */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Select Project</label>
-              <div className="relative">
-                <button
-                  onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
-                  disabled={loadingProjects}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left bg-white border border-gray-300 rounded-lg shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                    loadingProjects ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                  }`}
-                >
-                  <span className={selectedProject ? 'text-gray-900' : 'text-gray-500'}>
-                    {loadingProjects ? 'Loading projects...' : selectedProject?.name || 'Choose a project'}
-                  </span>
-                  <span className={`text-gray-400 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                </button>
-                
-                {projectDropdownOpen && !loadingProjects && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {projects.map((project) => (
-                      <button
-                        key={project.id}
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setProjectDropdownOpen(false);
-                          setTeamData(null);
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-                      >
-                        <div className="font-medium text-gray-900">{project.name}</div>
-                        <div className="text-xs text-gray-500">{project.description}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* Charts Grid */}
+      {chartsData.userStories && chartsData.testCases && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* User Stories Chart */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div ref={userStoriesChartRef} style={{ width: '100%', height: '400px' }} />
+          </div>
 
-            {/* Release Dropdown */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Select Release</label>
-              <div className="relative">
-                <button
-                  onClick={() => setReleaseDropdownOpen(!releaseDropdownOpen)}
-                  disabled={!selectedProject || loadingReleases}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left bg-white border border-gray-300 rounded-lg shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                    !selectedProject || loadingReleases ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                  }`}
-                >
-                  <span className={selectedRelease ? 'text-gray-900' : 'text-gray-500'}>
-                    {loadingReleases ? 'Loading releases...' : selectedRelease?.name || 'Choose a release'}
-                  </span>
-                  <span className={`text-gray-400 transition-transform ${releaseDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
-                </button>
-                
-                {releaseDropdownOpen && !loadingReleases && releases.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {releases.map((release) => (
-                      <button
-                        key={release.id}
-                        onClick={() => {
-                          setSelectedRelease(release);
-                          setReleaseDropdownOpen(false);
-                          setTeamData(null);
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-                      >
-                        <div className="font-medium text-gray-900">{release.name}</div>
-                        <div className="text-xs text-gray-500">{release.version} • {release.status}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Test Cases Chart */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div ref={testCasesChartRef} style={{ width: '100%', height: '400px' }} />
+          </div>
 
-            {/* View Mode Toggle */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">View Mode</label>
-              <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('weekly')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === 'weekly' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Weekly
-                </button>
-                <button
-                  onClick={() => setViewMode('daily')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === 'daily' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Daily
-                </button>
-              </div>
-            </div>
+          {/* Growth Chart */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div ref={growthChartRef} style={{ width: '100%', height: '400px' }} />
+          </div>
 
-            {/* Fetch Button */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 opacity-0">Action</label>
-              <button
-                onClick={fetchTeamData}
-                disabled={!canFetchData || loadingData}
-                className={`w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
-                  canFetchData && !loadingData
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {loadingData ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
-                ) : (
-                  'Fetch Data'
-                )}
-              </button>
-            </div>
+          {/* Comparison Chart */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div ref={comparisonChartRef} style={{ width: '100%', height: '400px' }} />
           </div>
         </div>
+      )}
 
-        {/* Data Table */}
-        {teamData && (
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Test Case Creation Activity
-                </h3>
-                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <span>📅</span>
-                  <span>
-                    {viewMode === 'daily' ? 'Last 16 days' : 'Last 13 weeks'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
-                      Team Member
-                    </th>
-                    {dateColumns.map((col) => (
-                      <th 
-                        key={col.key}
-                        className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[80px]"
-                        title={col.fullDate}
-                      >
-                        {col.label}
-                      </th>
-                    ))}
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {teamData.map((user, index) => {
-                    const userTotal = dateColumns.reduce((sum, col) => sum + (user[col.dateKey] || 0), 0);
-                    
-                    return (
-                      <tr key={user.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-6 py-4 whitespace-nowrap sticky left-0 bg-inherit z-10">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{user.full_name}</div>
-                            <div className="text-xs text-gray-500">@{user.created_user}</div>
-                          </div>
-                        </td>
-                        {dateColumns.map((col) => {
-                          const count = user[col.dateKey] || 0;
-                          return (
-                            <td key={col.key} className="px-4 py-4 text-center">
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                                count === 0 
-                                  ? 'text-gray-400' 
-                                  : count <= 3 
-                                    ? 'bg-green-100 text-green-800'
-                                    : count <= 7
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-purple-100 text-purple-800'
-                              }`}>
-                                {count}
-                              </span>
-                            </td>
-                          );
-                        })}
-                        <td className="px-4 py-4 text-center">
-                          <span className="inline-flex items-center justify-center w-10 h-8 rounded-lg bg-gray-100 text-sm font-bold text-gray-900">
-                            {userTotal}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!teamData && !loadingData && (
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-4xl mb-4">📊</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Track Team Activity</h3>
-            <p className="text-gray-500 mb-6">
-              Select a project and release, then click "Fetch Data" to view test case creation metrics.
-            </p>
-            <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span>1-3 test cases</span>
-              <div className="w-2 h-2 bg-blue-400 rounded-full ml-4"></div>
-              <span>4-7 test cases</span>
-              <div className="w-2 h-2 bg-purple-400 rounded-full ml-4"></div>
-              <span>8+ test cases</span>
-            </div>
-          </div>
-        )}
-
-        {/* No Data State */}
-        {teamData && teamData.length === 0 && (
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-4xl mb-4">📭</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-            <p className="text-gray-500 mb-4">
-              No test case creation data found for the selected project and release.
-            </p>
-            <p className="text-sm text-gray-400">
-              Project: <span className="font-medium">{selectedProject?.name}</span><br/>
-              Release: <span className="font-medium">{selectedRelease?.name}</span>
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Click outside handlers */}
-      {(projectDropdownOpen || releaseDropdownOpen) && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => {
-            setProjectDropdownOpen(false);
-            setReleaseDropdownOpen(false);
-          }}
-        />
+      {/* Empty State */}
+      {!chartsData.userStories && !chartsData.testCases && !loading && (
+        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+          <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <p className="text-gray-500">Select a project and click "Insight" to view analytics</p>
+        </div>
       )}
     </div>
   );
 };
 
-export default TeamTracker;
+export default ProgressInsights;
