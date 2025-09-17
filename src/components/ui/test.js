@@ -160,43 +160,56 @@ const ProgressInsights = () => {
         backgroundColor: '#ffffff',
         title: {
           text: config.title,
-          left: 20,
-          top: 10,
+          left: 24,
+          top: 20,
           textStyle: {
-            fontSize: 14,
-            fontWeight: 'normal',
-            color: '#333'
+            fontSize: 16,
+            fontWeight: '600',
+            color: '#1a202c',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           }
         },
         grid: {
-          left: 60,
-          right: 60,
-          bottom: 60,
-          top: 40,
+          left: 70,
+          right: 70,
+          bottom: 100,
+          top: 65,
           containLabel: false
         },
         tooltip: {
           trigger: 'axis',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          borderColor: '#ddd',
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+          borderColor: '#e2e8f0',
           borderWidth: 1,
-          padding: 10,
+          borderRadius: 8,
+          padding: 16,
+          extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);',
           textStyle: {
-            color: '#333',
-            fontSize: 12
+            color: '#1a202c',
+            fontSize: 13,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           },
           formatter: function(params) {
             const dataPoint = params[0];
             const value = dataPoint.value;
             const percentChange = percentageData[dataPoint.dataIndex];
             
+            // Format release name for tooltip
+            const releaseName = dataPoint.name.replace('NAM-', '').replace(/(\d{4})/g, '$1 ');
+            
             return `
-              <div style="font-size: 12px;">
-                <div style="font-weight: bold; margin-bottom: 5px;">${dataPoint.name}</div>
-                <div style="color: ${config.color}; font-weight: bold; font-size: 16px;">${value}</div>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568; font-size: 13px;">${releaseName}</div>
+                <div style="display: flex; align-items: baseline; gap: 8px;">
+                  <span style="color: ${config.color}; font-weight: 700; font-size: 24px;">${value.toLocaleString()}</span>
+                  <span style="color: #718096; font-size: 13px;">${config.unit || 'items'}</span>
+                </div>
                 ${percentChange !== 0 ? `
-                  <div style="color: ${percentChange > 0 ? '#34a853' : '#ea4335'}; margin-top: 5px;">
-                    ${percentChange > 0 ? '↑' : '↓'} ${Math.abs(percentChange)}%
+                  <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <span style="color: #718096; font-size: 12px;">Change: </span>
+                    <span style="color: ${percentChange > 0 ? '#48bb78' : '#f56565'}; font-weight: 600; font-size: 13px;">
+                      ${percentChange > 0 ? '+' : ''}${percentChange}%
+                    </span>
                   </div>
                 ` : ''}
               </div>
@@ -208,18 +221,29 @@ const ProgressInsights = () => {
           data: data.map(item => item.release_name),
           axisLine: {
             lineStyle: {
-              color: '#e0e0e0'
+              color: '#e2e8f0',
+              width: 1.5
             }
           },
           axisTick: {
             show: false
           },
           axisLabel: {
-            color: '#666',
-            fontSize: 10,
-            rotate: 45,
+            color: '#4a5568',
+            fontSize: 12,
+            fontWeight: '500',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            rotate: 35,
+            margin: 15,
             formatter: function(value) {
-              return value.length > 20 ? value.substring(0, 20) + '...' : value;
+              // Enhanced formatting for release names
+              const formatted = value
+                .replace('NAM-', '')
+                .replace(/(\d{4})\s*R(\d{2})\s*(\d{2})\/(\d{2})\/(\d{2})/, '$1 R$2 $3/$4')
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              return formatted.length > 25 ? formatted.substring(0, 22) + '...' : formatted;
             }
           }
         },
@@ -228,36 +252,55 @@ const ProgressInsights = () => {
             type: 'value',
             name: config.yAxisName,
             nameLocation: 'middle',
-            nameGap: 40,
+            nameGap: 50,
             nameTextStyle: {
-              color: '#666',
-              fontSize: 11
+              color: '#4a5568',
+              fontSize: 13,
+              fontWeight: '600',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             },
             axisLine: {
-              show: false
+              show: true,
+              lineStyle: {
+                color: '#e2e8f0',
+                width: 1.5
+              }
             },
             axisTick: {
               show: false
             },
             axisLabel: {
-              color: '#666',
-              fontSize: 10
+              color: '#718096',
+              fontSize: 12,
+              fontWeight: '500',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              formatter: function(value) {
+                return value.toLocaleString();
+              }
             },
             splitLine: {
               lineStyle: {
-                color: '#f0f0f0',
-                type: 'dashed'
+                color: '#f7fafc',
+                type: 'dashed',
+                width: 1
               }
+            },
+            min: 0,
+            max: function(value) {
+              return Math.ceil(value.max * 1.15);
             }
           },
           {
             type: 'value',
-            name: '% Diff to Last Story',
+            name: '% Change',
+            show: false,
             nameLocation: 'middle',
             nameGap: 40,
             nameTextStyle: {
-              color: '#666',
-              fontSize: 11
+              color: '#718096',
+              fontSize: 12,
+              fontWeight: '500',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             },
             position: 'right',
             axisLine: {
@@ -267,8 +310,7 @@ const ProgressInsights = () => {
               show: false
             },
             axisLabel: {
-              color: '#666',
-              fontSize: 10,
+              show: false,
               formatter: '{value}%'
             },
             splitLine: {
@@ -282,32 +324,62 @@ const ProgressInsights = () => {
             type: 'line',
             smooth: true,
             symbol: 'circle',
-            symbolSize: 8,
+            symbolSize: 10,
             itemStyle: {
-              color: config.color,
-              borderWidth: 2,
-              borderColor: '#fff'
+              color: '#ffffff',
+              borderColor: config.color,
+              borderWidth: 3,
+              shadowColor: 'rgba(0, 0, 0, 0.1)',
+              shadowBlur: 4,
+              shadowOffsetY: 2
             },
             lineStyle: {
-              width: 3,
-              color: config.color
+              width: 3.5,
+              color: config.color,
+              shadowColor: `${config.color}33`,
+              shadowBlur: 10,
+              shadowOffsetY: 4
+            },
+            emphasis: {
+              scale: 1.3,
+              itemStyle: {
+                borderWidth: 4,
+                shadowColor: 'rgba(0, 0, 0, 0.2)',
+                shadowBlur: 10
+              }
             },
             data: data.map(item => item[config.valueKey] || item.value),
             markPoint: {
-              symbol: 'circle',
-              symbolSize: 10,
+              symbol: 'roundRect',
+              symbolSize: [55, 28],
+              symbolOffset: [0, -20],
               label: {
                 show: true,
-                position: 'top',
-                formatter: '{c}',
+                formatter: function(params) {
+                  return params.value.toLocaleString();
+                },
                 color: config.color,
-                fontWeight: 'bold',
-                fontSize: 11
+                fontWeight: '700',
+                fontSize: 13,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+              },
+              itemStyle: {
+                color: `${config.color}15`,
+                borderColor: config.color,
+                borderWidth: 1.5,
+                borderRadius: 4
               },
               data: data.map((item, index) => ({
                 coord: [index, item[config.valueKey] || item.value],
                 value: item[config.valueKey] || item.value
               }))
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: `${config.color}20` },
+                { offset: 0.8, color: `${config.color}05` },
+                { offset: 1, color: 'rgba(255, 255, 255, 0)' }
+              ])
             }
           }
         ]
@@ -323,8 +395,9 @@ const ProgressInsights = () => {
       title: 'User Stories By Release',
       yAxisName: 'User Stories',
       seriesName: 'User Stories',
-      color: '#ff9800',
-      valueKey: 'story_count'
+      color: '#f59e0b',
+      valueKey: 'story_count',
+      unit: 'stories'
     });
 
     // 2. Test Cases By Release
@@ -332,8 +405,9 @@ const ProgressInsights = () => {
       title: 'Test Cases By Release',
       yAxisName: 'Test Cases',
       seriesName: 'Test Cases',
-      color: '#ff9800',
-      valueKey: 'test_case_count'
+      color: '#f59e0b',
+      valueKey: 'test_case_count',
+      unit: 'test cases'
     });
 
     // 3. Test Steps By Release
@@ -341,8 +415,9 @@ const ProgressInsights = () => {
       title: 'Test Steps By Release',
       yAxisName: 'Test Steps',
       seriesName: 'Test Steps',
-      color: '#ff9800',
-      valueKey: 'value'
+      color: '#f59e0b',
+      valueKey: 'value',
+      unit: 'steps'
     });
 
     // 4. Users By Release
@@ -350,8 +425,9 @@ const ProgressInsights = () => {
       title: 'Users By Release',
       yAxisName: 'Users',
       seriesName: 'Users',
-      color: '#ff9800',
-      valueKey: 'value'
+      color: '#f59e0b',
+      valueKey: 'value',
+      unit: 'users'
     });
 
     // 5. Defects By Release
@@ -359,8 +435,9 @@ const ProgressInsights = () => {
       title: 'Defects By Release',
       yAxisName: 'Defects',
       seriesName: 'Defects',
-      color: '#ff9800',
-      valueKey: 'value'
+      color: '#f59e0b',
+      valueKey: 'value',
+      unit: 'defects'
     });
 
     // 6. Incidents By Release
@@ -368,8 +445,9 @@ const ProgressInsights = () => {
       title: 'Incidents By Release',
       yAxisName: 'Incidents',
       seriesName: 'Incidents',
-      color: '#ff9800',
-      valueKey: 'value'
+      color: '#f59e0b',
+      valueKey: 'value',
+      unit: 'incidents'
     });
 
     // Handle window resize
@@ -504,7 +582,7 @@ const ProgressInsights = () => {
             disabled={!selectedProject || loading}
             className={`px-6 py-2 rounded font-medium text-sm transition-all ${
               selectedProject && !loading
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
@@ -526,29 +604,29 @@ const ProgressInsights = () => {
       {/* Charts Grid - 2x3 Layout */}
       {Object.values(chartsData).some(data => data !== null) && (
         <div className="px-6 pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Row 1 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={userStoriesChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={userStoriesChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={testCasesChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={testCasesChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
 
             {/* Row 2 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={testStepsChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={testStepsChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={usersChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={usersChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
 
             {/* Row 3 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={defectsChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={defectsChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div ref={incidentsChartRef} style={{ width: '100%', height: '350px' }} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div ref={incidentsChartRef} style={{ width: '100%', height: '380px' }} />
             </div>
           </div>
         </div>
