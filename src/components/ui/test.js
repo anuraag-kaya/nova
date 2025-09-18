@@ -11,20 +11,12 @@ const ProgressInsights = () => {
   const [loading, setLoading] = useState(false);
   const [chartsData, setChartsData] = useState({
     userStories: null,
-    testCases: null,
-    testSteps: null,
-    users: null,
-    defects: null,
-    incidents: null
+    testCases: null
   });
   
   const dropdownRef = useRef(null);
   const userStoriesChartRef = useRef(null);
   const testCasesChartRef = useRef(null);
-  const testStepsChartRef = useRef(null);
-  const usersChartRef = useRef(null);
-  const defectsChartRef = useRef(null);
-  const incidentsChartRef = useRef(null);
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -72,7 +64,7 @@ const ProgressInsights = () => {
     
     setLoading(true);
     try {
-      // Fetch all data in parallel
+      // Fetch only real data
       const [userStoriesRes, testCasesRes] = await Promise.all([
         fetch(`/api/us-by-release?project_id=${selectedProject.id}`, {
           headers: { 'x-user-soeid': 'x-user-soeid' }
@@ -86,30 +78,16 @@ const ProgressInsights = () => {
         const userStoriesData = await userStoriesRes.json();
         const testCasesData = await testCasesRes.json();
         
-        // Generate mock data for other charts based on the pattern
-        const mockTestStepsData = generateMockData(userStoriesData.data, 'testSteps');
-        const mockUsersData = generateMockData(userStoriesData.data, 'users');
-        const mockDefectsData = generateMockData(userStoriesData.data, 'defects');
-        const mockIncidentsData = generateMockData(userStoriesData.data, 'incidents');
-        
         setChartsData({
           userStories: userStoriesData.data,
-          testCases: testCasesData.data,
-          testSteps: mockTestStepsData,
-          users: mockUsersData,
-          defects: mockDefectsData,
-          incidents: mockIncidentsData
+          testCases: testCasesData.data
         });
         
         // Initialize charts after data is loaded
         setTimeout(() => {
           initializeCharts({
             userStories: userStoriesData.data,
-            testCases: testCasesData.data,
-            testSteps: mockTestStepsData,
-            users: mockUsersData,
-            defects: mockDefectsData,
-            incidents: mockIncidentsData
+            testCases: testCasesData.data
           });
         }, 100);
       }
@@ -120,40 +98,16 @@ const ProgressInsights = () => {
     }
   };
 
-  // Generate mock data for demonstration
-  const generateMockData = (baseData, type) => {
-    const multipliers = {
-      testSteps: { min: 5, max: 15 },
-      users: { min: 2, max: 8 },
-      defects: { min: 20, max: 200 },
-      incidents: { min: 5, max: 15 }
-    };
-    
-    return baseData.map((item, index) => {
-      const mult = multipliers[type];
-      const baseValue = Math.floor(Math.random() * (mult.max - mult.min) + mult.min);
-      const value = type === 'defects' || type === 'incidents' 
-        ? Math.max(mult.min, baseValue - index * 2)
-        : baseValue + index;
-      
-      return {
-        ...item,
-        value: value,
-        percent_diff: index > 0 ? ((value - baseData[index-1].story_count) / baseData[index-1].story_count * 100).toFixed(2) : null
-      };
-    });
-  };
-
   const createLineChart = (chartRef, data, config) => {
     if (chartRef.current) {
       const chart = echarts.init(chartRef.current);
       
-      // Calculate percentage values for secondary y-axis
+      // Calculate percentage values
       const percentageData = data.map((item, index) => {
-        if (index === 0) return 0;
-        const prevValue = data[index - 1][config.valueKey] || data[index - 1].value;
-        const currentValue = item[config.valueKey] || item.value;
-        return ((currentValue - prevValue) / prevValue * 100).toFixed(1);
+        if (index === 0) return null;
+        const prevValue = data[index - 1][config.valueKey];
+        const currentValue = item[config.valueKey];
+        return prevValue > 0 ? ((currentValue - prevValue) / prevValue * 100).toFixed(1) : null;
       });
 
       const option = {
@@ -170,10 +124,10 @@ const ProgressInsights = () => {
           }
         },
         grid: {
-          left: 70,
-          right: 70,
-          bottom: 100,
-          top: 65,
+          left: 80,
+          right: 80,
+          bottom: 120,
+          top: 100,
           containLabel: false
         },
         tooltip: {
@@ -204,10 +158,10 @@ const ProgressInsights = () => {
                   <span style="color: ${config.color}; font-weight: 700; font-size: 24px;">${value.toLocaleString()}</span>
                   <span style="color: #718096; font-size: 13px;">${config.unit || 'items'}</span>
                 </div>
-                ${percentChange !== 0 ? `
+                ${percentChange !== null ? `
                   <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
                     <span style="color: #718096; font-size: 12px;">Change: </span>
-                    <span style="color: ${percentChange > 0 ? '#48bb78' : '#f56565'}; font-weight: 600; font-size: 13px;">
+                    <span style="color: #3182ce; font-weight: 600; font-size: 13px;">
                       ${percentChange > 0 ? '+' : ''}${percentChange}%
                     </span>
                   </div>
@@ -233,17 +187,18 @@ const ProgressInsights = () => {
             fontSize: 12,
             fontWeight: '500',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            rotate: 35,
-            margin: 15,
+            rotate: 30,
+            margin: 20,
+            interval: 0,
             formatter: function(value) {
               // Enhanced formatting for release names
               const formatted = value
                 .replace('NAM-', '')
-                .replace(/(\d{4})\s*R(\d{2})\s*(\d{2})\/(\d{2})\/(\d{2})/, '$1 R$2 $3/$4')
+                .replace(/(\d{4})\s*R(\d{2})\s*/, '$1 R$2 ')
                 .replace(/\s+/g, ' ')
                 .trim();
               
-              return formatted.length > 25 ? formatted.substring(0, 22) + '...' : formatted;
+              return formatted;
             }
           }
         },
@@ -252,7 +207,7 @@ const ProgressInsights = () => {
             type: 'value',
             name: config.yAxisName,
             nameLocation: 'middle',
-            nameGap: 50,
+            nameGap: 60,
             nameTextStyle: {
               color: '#4a5568',
               fontSize: 13,
@@ -287,34 +242,7 @@ const ProgressInsights = () => {
             },
             min: 0,
             max: function(value) {
-              return Math.ceil(value.max * 1.15);
-            }
-          },
-          {
-            type: 'value',
-            name: '% Change',
-            show: false,
-            nameLocation: 'middle',
-            nameGap: 40,
-            nameTextStyle: {
-              color: '#718096',
-              fontSize: 12,
-              fontWeight: '500',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            },
-            position: 'right',
-            axisLine: {
-              show: false
-            },
-            axisTick: {
-              show: false
-            },
-            axisLabel: {
-              show: false,
-              formatter: '{value}%'
-            },
-            splitLine: {
-              show: false
+              return Math.ceil(value.max * 1.2);
             }
           }
         ],
@@ -324,62 +252,75 @@ const ProgressInsights = () => {
             type: 'line',
             smooth: true,
             symbol: 'circle',
-            symbolSize: 10,
+            symbolSize: 8,
             itemStyle: {
-              color: '#ffffff',
-              borderColor: config.color,
-              borderWidth: 3,
+              color: config.color,
+              borderColor: '#ffffff',
+              borderWidth: 2,
               shadowColor: 'rgba(0, 0, 0, 0.1)',
               shadowBlur: 4,
               shadowOffsetY: 2
             },
             lineStyle: {
-              width: 3.5,
+              width: 3,
               color: config.color,
-              shadowColor: `${config.color}33`,
-              shadowBlur: 10,
-              shadowOffsetY: 4
+              shadowColor: `${config.color}22`,
+              shadowBlur: 8,
+              shadowOffsetY: 3
             },
             emphasis: {
-              scale: 1.3,
+              scale: 1.5,
               itemStyle: {
-                borderWidth: 4,
+                borderWidth: 3,
                 shadowColor: 'rgba(0, 0, 0, 0.2)',
                 shadowBlur: 10
               }
             },
-            data: data.map(item => item[config.valueKey] || item.value),
-            markPoint: {
-              symbol: 'roundRect',
-              symbolSize: [55, 28],
-              symbolOffset: [0, -20],
-              label: {
-                show: true,
-                formatter: function(params) {
-                  return params.value.toLocaleString();
-                },
-                color: config.color,
-                fontWeight: '700',
-                fontSize: 13,
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            data: data.map(item => item[config.valueKey]),
+            label: {
+              show: true,
+              position: 'top',
+              distance: 15,
+              formatter: function(params) {
+                return params.value.toLocaleString();
               },
-              itemStyle: {
-                color: `${config.color}15`,
-                borderColor: config.color,
-                borderWidth: 1.5,
-                borderRadius: 4
-              },
-              data: data.map((item, index) => ({
-                coord: [index, item[config.valueKey] || item.value],
-                value: item[config.valueKey] || item.value
-              }))
+              color: config.color,
+              fontWeight: '700',
+              fontSize: 13,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             },
             areaStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: `${config.color}20` },
+                { offset: 0, color: `${config.color}15` },
                 { offset: 0.8, color: `${config.color}05` },
                 { offset: 1, color: 'rgba(255, 255, 255, 0)' }
               ])
+            }
+          },
+          // Additional series for percentage labels
+          {
+            name: 'Percentage Change',
+            type: 'line',
+            symbol: 'none',
+            lineStyle: {
+              width: 0
+            },
+            data: data.map((item, index) => item[config.valueKey]),
+            label: {
+              show: true,
+              position: 'bottom',
+              distance: 15,
+              formatter: function(params) {
+                const percent = percentageData[params.dataIndex];
+                return percent !== null ? `${percent > 0 ? '+' : ''}${percent}%` : '';
+              },
+              color: '#3182ce',
+              fontWeight: '600',
+              fontSize: 11,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              backgroundColor: '#e6f3ff',
+              borderRadius: 4,
+              padding: [2, 6]
             }
           }
         ]
@@ -391,77 +332,32 @@ const ProgressInsights = () => {
 
   const initializeCharts = (allData) => {
     // 1. User Stories By Release
-    createLineChart(userStoriesChartRef, allData.userStories, {
-      title: 'User Stories By Release',
-      yAxisName: 'User Stories',
-      seriesName: 'User Stories',
-      color: '#f59e0b',
-      valueKey: 'story_count',
-      unit: 'stories'
-    });
+    if (allData.userStories) {
+      createLineChart(userStoriesChartRef, allData.userStories, {
+        title: 'User Stories By Release',
+        yAxisName: 'User Stories',
+        seriesName: 'User Stories',
+        color: '#f59e0b',
+        valueKey: 'story_count',
+        unit: 'stories'
+      });
+    }
 
     // 2. Test Cases By Release
-    createLineChart(testCasesChartRef, allData.testCases, {
-      title: 'Test Cases By Release',
-      yAxisName: 'Test Cases',
-      seriesName: 'Test Cases',
-      color: '#f59e0b',
-      valueKey: 'test_case_count',
-      unit: 'test cases'
-    });
-
-    // 3. Test Steps By Release
-    createLineChart(testStepsChartRef, allData.testSteps, {
-      title: 'Test Steps By Release',
-      yAxisName: 'Test Steps',
-      seriesName: 'Test Steps',
-      color: '#f59e0b',
-      valueKey: 'value',
-      unit: 'steps'
-    });
-
-    // 4. Users By Release
-    createLineChart(usersChartRef, allData.users, {
-      title: 'Users By Release',
-      yAxisName: 'Users',
-      seriesName: 'Users',
-      color: '#f59e0b',
-      valueKey: 'value',
-      unit: 'users'
-    });
-
-    // 5. Defects By Release
-    createLineChart(defectsChartRef, allData.defects, {
-      title: 'Defects By Release',
-      yAxisName: 'Defects',
-      seriesName: 'Defects',
-      color: '#f59e0b',
-      valueKey: 'value',
-      unit: 'defects'
-    });
-
-    // 6. Incidents By Release
-    createLineChart(incidentsChartRef, allData.incidents, {
-      title: 'Incidents By Release',
-      yAxisName: 'Incidents',
-      seriesName: 'Incidents',
-      color: '#f59e0b',
-      valueKey: 'value',
-      unit: 'incidents'
-    });
+    if (allData.testCases) {
+      createLineChart(testCasesChartRef, allData.testCases, {
+        title: 'Test Cases By Release',
+        yAxisName: 'Test Cases',
+        seriesName: 'Test Cases',
+        color: '#f59e0b',
+        valueKey: 'test_case_count',
+        unit: 'test cases'
+      });
+    }
 
     // Handle window resize
     const handleResize = () => {
-      const charts = [
-        userStoriesChartRef,
-        testCasesChartRef,
-        testStepsChartRef,
-        usersChartRef,
-        defectsChartRef,
-        incidentsChartRef
-      ];
-      
-      charts.forEach(ref => {
+      [userStoriesChartRef, testCasesChartRef].forEach(ref => {
         if (ref.current) {
           const chart = echarts.getInstanceByDom(ref.current);
           if (chart) {
@@ -481,7 +377,7 @@ const ProgressInsights = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header Section - Matching Team Tracker Design */}
+      {/* Header Section */}
       <div className="bg-white border-b border-gray-200 shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center space-x-3">
           <span className="text-4xl">📈</span>
@@ -601,39 +497,29 @@ const ProgressInsights = () => {
         </div>
       </div>
 
-      {/* Charts Grid - 2x3 Layout */}
-      {Object.values(chartsData).some(data => data !== null) && (
+      {/* Charts Grid - Only show charts for available data */}
+      {(chartsData.userStories || chartsData.testCases) && (
         <div className="px-6 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Row 1 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={userStoriesChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={testCasesChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
-
-            {/* Row 2 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={testStepsChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={usersChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
-
-            {/* Row 3 */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={defectsChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div ref={incidentsChartRef} style={{ width: '100%', height: '380px' }} />
-            </div>
+            {/* User Stories Chart */}
+            {chartsData.userStories && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div ref={userStoriesChartRef} style={{ width: '100%', height: '420px' }} />
+              </div>
+            )}
+            
+            {/* Test Cases Chart */}
+            {chartsData.testCases && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div ref={testCasesChartRef} style={{ width: '100%', height: '420px' }} />
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Empty State */}
-      {!Object.values(chartsData).some(data => data !== null) && !loading && (
+      {!chartsData.userStories && !chartsData.testCases && !loading && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-20 mx-6 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
             <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
