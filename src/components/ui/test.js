@@ -11,12 +11,96 @@ const ProgressInsights = () => {
   const [loading, setLoading] = useState(false);
   const [chartsData, setChartsData] = useState({
     userStories: null,
-    testCases: null
+    testCases: null,
+    defects: null,
+    incidents: null,
+    users: null,
+    testSteps: null
   });
   
   const dropdownRef = useRef(null);
   const userStoriesChartRef = useRef(null);
   const testCasesChartRef = useRef(null);
+  const defectsChartRef = useRef(null);
+  const incidentsChartRef = useRef(null);
+  const usersChartRef = useRef(null);
+  const testStepsChartRef = useRef(null);
+
+  // Chart configurations
+  const chartConfigs = [
+    {
+      key: 'userStories',
+      endpoint: '/us-by-release',
+      title: 'User Stories by Release',
+      yAxisName: 'User Stories Count',
+      seriesName: 'User Stories',
+      color: '#3B82F6',
+      valueKey: 'story_count',
+      unit: 'stories',
+      ref: userStoriesChartRef,
+      icon: '📋'
+    },
+    {
+      key: 'testCases',
+      endpoint: '/tc-by-release',
+      title: 'Test Cases by Release',
+      yAxisName: 'Test Cases Count',
+      seriesName: 'Test Cases',
+      color: '#10B981',
+      valueKey: 'test_case_count',
+      unit: 'test cases',
+      ref: testCasesChartRef,
+      icon: '✅'
+    },
+    {
+      key: 'defects',
+      endpoint: '/defect-by-release',
+      title: 'Defects by Release',
+      yAxisName: 'Defects Count',
+      seriesName: 'Defects',
+      color: '#EF4444',
+      valueKey: 'defect_count',
+      unit: 'defects',
+      ref: defectsChartRef,
+      icon: '🐛'
+    },
+    {
+      key: 'incidents',
+      endpoint: '/incidents-by-release',
+      title: 'Incidents by Release',
+      yAxisName: 'Incidents Count',
+      seriesName: 'Incidents',
+      color: '#F59E0B',
+      valueKey: 'inc_count',
+      unit: 'incidents',
+      ref: incidentsChartRef,
+      icon: '⚠️'
+    },
+    {
+      key: 'users',
+      endpoint: '/users-by-release',
+      title: 'Users by Release',
+      yAxisName: 'Users Count',
+      seriesName: 'Users',
+      color: '#8B5CF6',
+      valueKey: 'user_count',
+      unit: 'users',
+      ref: usersChartRef,
+      icon: '👥'
+    },
+    {
+      key: 'testSteps',
+      endpoint: '/test-step-by-release',
+      title: 'Test Steps by Release',
+      yAxisName: 'Test Steps Count',
+      seriesName: 'Test Steps',
+      color: '#06B6D4',
+      valueKey: 'test_step_count',
+      unit: 'test steps',
+      ref: testStepsChartRef,
+      icon: '🔄'
+    }
+  ];
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -64,33 +148,29 @@ const ProgressInsights = () => {
     
     setLoading(true);
     try {
-      // Fetch only real data
-      const [userStoriesRes, testCasesRes] = await Promise.all([
-        fetch(`/api/us-by-release?project_id=${selectedProject.id}`, {
+      // Fetch data for all 6 endpoints
+      const promises = chartConfigs.map(config =>
+        fetch(`/api${config.endpoint}?project_id=${selectedProject.id}`, {
           headers: { 'x-user-soeid': 'x-user-soeid' }
-        }),
-        fetch(`/api/tc-by-release?project_id=${selectedProject.id}`, {
-          headers: { 'x-user-soeid': 'x-user-soeid' }
-        })
-      ]);
+        }).then(res => res.ok ? res.json() : null)
+      );
       
-      if (userStoriesRes.ok && testCasesRes.ok) {
-        const userStoriesData = await userStoriesRes.json();
-        const testCasesData = await testCasesRes.json();
-        
-        setChartsData({
-          userStories: userStoriesData.data,
-          testCases: testCasesData.data
-        });
-        
-        // Initialize charts after data is loaded
-        setTimeout(() => {
-          initializeCharts({
-            userStories: userStoriesData.data,
-            testCases: testCasesData.data
-          });
-        }, 100);
-      }
+      const results = await Promise.all(promises);
+      
+      // Map results to chart data
+      const newChartsData = {};
+      chartConfigs.forEach((config, index) => {
+        if (results[index]) {
+          newChartsData[config.key] = results[index].data;
+        }
+      });
+      
+      setChartsData(newChartsData);
+      
+      // Initialize charts after data is loaded
+      setTimeout(() => {
+        initializeCharts(newChartsData);
+      }, 100);
     } catch (error) {
       console.error('Error fetching insights data:', error);
     } finally {
@@ -99,7 +179,7 @@ const ProgressInsights = () => {
   };
 
   const createLineChart = (chartRef, data, config) => {
-    if (chartRef.current) {
+    if (chartRef.current && data) {
       const chart = echarts.init(chartRef.current);
       
       // Calculate percentage values
@@ -114,33 +194,39 @@ const ProgressInsights = () => {
         backgroundColor: '#ffffff',
         title: {
           text: config.title,
-          left: 24,
-          top: 20,
+          left: 32,
+          top: 24,
           textStyle: {
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#1a202c',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            fontSize: 18,
+            fontWeight: '700',
+            color: '#1F2937',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
+          },
+          subtext: `${config.icon} Release Progress Analytics`,
+          subtextStyle: {
+            fontSize: 13,
+            color: '#6B7280',
+            fontWeight: '500'
           }
         },
         grid: {
-          left: 80,
-          right: 80,
-          bottom: 120,
-          top: 100,
+          left: 100,
+          right: 100,
+          bottom: 160,
+          top: 120,
           containLabel: false
         },
         tooltip: {
           trigger: 'axis',
           backgroundColor: 'rgba(255, 255, 255, 0.98)',
-          borderColor: '#e2e8f0',
+          borderColor: '#E5E7EB',
           borderWidth: 1,
-          borderRadius: 8,
-          padding: 16,
-          extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);',
+          borderRadius: 12,
+          padding: 20,
+          extraCssText: 'box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);',
           textStyle: {
-            color: '#1a202c',
-            fontSize: 13,
+            color: '#1F2937',
+            fontSize: 14,
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           },
           formatter: function(params) {
@@ -153,17 +239,22 @@ const ProgressInsights = () => {
             
             return `
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568; font-size: 13px;">${releaseName}</div>
-                <div style="display: flex; align-items: baseline; gap: 8px;">
-                  <span style="color: ${config.color}; font-weight: 700; font-size: 24px;">${value.toLocaleString()}</span>
-                  <span style="color: #718096; font-size: 13px;">${config.unit || 'items'}</span>
+                <div style="font-weight: 600; margin-bottom: 12px; color: #374151; font-size: 15px; display: flex; align-items: center;">
+                  <span style="margin-right: 8px; font-size: 16px;">${config.icon}</span>
+                  ${releaseName}
+                </div>
+                <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px;">
+                  <span style="color: ${config.color}; font-weight: 800; font-size: 28px;">${value.toLocaleString()}</span>
+                  <span style="color: #6B7280; font-size: 14px; font-weight: 500;">${config.unit}</span>
                 </div>
                 ${percentChange !== null ? `
-                  <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                    <span style="color: #718096; font-size: 12px;">Change: </span>
-                    <span style="color: #3182ce; font-weight: 600; font-size: 13px;">
-                      ${percentChange > 0 ? '+' : ''}${percentChange}%
-                    </span>
+                  <div style="margin-top: 12px; padding: 8px 12px; background: #F3F4F6; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="color: #6B7280; font-size: 13px; font-weight: 500;">Change from previous:</span>
+                      <span style="color: ${parseFloat(percentChange) >= 0 ? '#059669' : '#DC2626'}; font-weight: 700; font-size: 14px; display: flex; align-items: center;">
+                        ${parseFloat(percentChange) >= 0 ? '↗' : '↘'} ${Math.abs(percentChange)}%
+                      </span>
+                    </div>
                   </div>
                 ` : ''}
               </div>
@@ -175,30 +266,30 @@ const ProgressInsights = () => {
           data: data.map(item => item.release_name),
           axisLine: {
             lineStyle: {
-              color: '#e2e8f0',
-              width: 1.5
+              color: '#D1D5DB',
+              width: 2
             }
           },
           axisTick: {
             show: false
           },
           axisLabel: {
-            color: '#4a5568',
-            fontSize: 12,
-            fontWeight: '500',
+            color: '#374151',
+            fontSize: 13,
+            fontWeight: '600',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            rotate: 30,
-            margin: 20,
+            rotate: 45,
+            margin: 25,
             interval: 0,
             formatter: function(value) {
               // Enhanced formatting for release names
               const formatted = value
                 .replace('NAM-', '')
-                .replace(/(\d{4})\s*R(\d{2})\s*/, '$1 R$2 ')
+                .replace(/(\d{4})\s*R(\d{2})\s*/, '$1 R$2')
                 .replace(/\s+/g, ' ')
                 .trim();
               
-              return formatted;
+              return formatted.length > 12 ? formatted.substring(0, 12) + '...' : formatted;
             }
           }
         },
@@ -207,42 +298,45 @@ const ProgressInsights = () => {
             type: 'value',
             name: config.yAxisName,
             nameLocation: 'middle',
-            nameGap: 60,
+            nameGap: 75,
             nameTextStyle: {
-              color: '#4a5568',
-              fontSize: 13,
-              fontWeight: '600',
+              color: '#374151',
+              fontSize: 14,
+              fontWeight: '700',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             },
             axisLine: {
               show: true,
               lineStyle: {
-                color: '#e2e8f0',
-                width: 1.5
+                color: '#D1D5DB',
+                width: 2
               }
             },
             axisTick: {
               show: false
             },
             axisLabel: {
-              color: '#718096',
-              fontSize: 12,
-              fontWeight: '500',
+              color: '#6B7280',
+              fontSize: 13,
+              fontWeight: '600',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
               formatter: function(value) {
+                if (value >= 1000) {
+                  return (value / 1000).toFixed(1) + 'K';
+                }
                 return value.toLocaleString();
               }
             },
             splitLine: {
               lineStyle: {
-                color: '#f7fafc',
+                color: '#F3F4F6',
                 type: 'dashed',
                 width: 1
               }
             },
             min: 0,
             max: function(value) {
-              return Math.ceil(value.max * 1.2);
+              return Math.ceil(value.max * 1.15);
             }
           }
         ],
@@ -252,47 +346,56 @@ const ProgressInsights = () => {
             type: 'line',
             smooth: true,
             symbol: 'circle',
-            symbolSize: 8,
+            symbolSize: 10,
             itemStyle: {
               color: config.color,
               borderColor: '#ffffff',
-              borderWidth: 2,
-              shadowColor: 'rgba(0, 0, 0, 0.1)',
-              shadowBlur: 4,
-              shadowOffsetY: 2
+              borderWidth: 3,
+              shadowColor: 'rgba(0, 0, 0, 0.15)',
+              shadowBlur: 8,
+              shadowOffsetY: 4
             },
             lineStyle: {
-              width: 3,
+              width: 4,
               color: config.color,
-              shadowColor: `${config.color}22`,
-              shadowBlur: 8,
-              shadowOffsetY: 3
+              shadowColor: `${config.color}30`,
+              shadowBlur: 12,
+              shadowOffsetY: 4
             },
             emphasis: {
-              scale: 1.5,
+              scale: 1.8,
               itemStyle: {
-                borderWidth: 3,
-                shadowColor: 'rgba(0, 0, 0, 0.2)',
-                shadowBlur: 10
+                borderWidth: 4,
+                shadowColor: 'rgba(0, 0, 0, 0.25)',
+                shadowBlur: 15
               }
             },
             data: data.map(item => item[config.valueKey]),
             label: {
               show: true,
               position: 'top',
-              distance: 15,
+              distance: 20,
               formatter: function(params) {
-                return params.value.toLocaleString();
+                const value = params.value;
+                if (value >= 1000) {
+                  return (value / 1000).toFixed(1) + 'K';
+                }
+                return value.toLocaleString();
               },
               color: config.color,
-              fontWeight: '700',
-              fontSize: 13,
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+              fontWeight: '800',
+              fontSize: 14,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              borderRadius: 6,
+              padding: [4, 8],
+              borderColor: config.color,
+              borderWidth: 1
             },
             areaStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: `${config.color}15` },
-                { offset: 0.8, color: `${config.color}05` },
+                { offset: 0, color: `${config.color}20` },
+                { offset: 0.7, color: `${config.color}08` },
                 { offset: 1, color: 'rgba(255, 255, 255, 0)' }
               ])
             }
@@ -309,224 +412,268 @@ const ProgressInsights = () => {
             label: {
               show: true,
               position: 'bottom',
-              distance: 15,
+              distance: 25,
               formatter: function(params) {
                 const percent = percentageData[params.dataIndex];
-                return percent !== null ? `${percent > 0 ? '+' : ''}${percent}%` : '';
+                if (percent === null || Math.abs(percent) < 0.1) return '';
+                
+                return `${parseFloat(percent) >= 0 ? '↗' : '↘'} ${Math.abs(percent)}%`;
               },
-              color: '#3182ce',
-              fontWeight: '600',
-              fontSize: 11,
+              color: function(params) {
+                const percent = percentageData[params.dataIndex];
+                return percent >= 0 ? '#059669' : '#DC2626';
+              },
+              fontWeight: '700',
+              fontSize: 12,
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              backgroundColor: '#e6f3ff',
-              borderRadius: 4,
-              padding: [2, 6]
+              backgroundColor: function(params) {
+                const percent = percentageData[params.dataIndex];
+                return percent >= 0 ? '#ECFDF5' : '#FEF2F2';
+              },
+              borderRadius: 6,
+              padding: [3, 8],
+              borderColor: function(params) {
+                const percent = percentageData[params.dataIndex];
+                return percent >= 0 ? '#059669' : '#DC2626';
+              },
+              borderWidth: 1
             }
           }
         ]
       };
 
       chart.setOption(option);
+      
+      // Handle window resize
+      const handleResize = () => {
+        chart.resize();
+      };
+      
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        chart.dispose();
+      };
     }
   };
 
   const initializeCharts = (allData) => {
-    // 1. User Stories By Release
-    if (allData.userStories) {
-      createLineChart(userStoriesChartRef, allData.userStories, {
-        title: 'User Stories By Release',
-        yAxisName: 'User Stories',
-        seriesName: 'User Stories',
-        color: '#f59e0b',
-        valueKey: 'story_count',
-        unit: 'stories'
-      });
-    }
-
-    // 2. Test Cases By Release
-    if (allData.testCases) {
-      createLineChart(testCasesChartRef, allData.testCases, {
-        title: 'Test Cases By Release',
-        yAxisName: 'Test Cases',
-        seriesName: 'Test Cases',
-        color: '#f59e0b',
-        valueKey: 'test_case_count',
-        unit: 'test cases'
-      });
-    }
-
-    // Handle window resize
-    const handleResize = () => {
-      [userStoriesChartRef, testCasesChartRef].forEach(ref => {
-        if (ref.current) {
-          const chart = echarts.getInstanceByDom(ref.current);
-          if (chart) {
-            chart.resize();
-          }
-        }
-      });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    chartConfigs.forEach(config => {
+      if (allData[config.key]) {
+        createLineChart(config.ref, allData[config.key], config);
+      }
+    });
   };
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(dropdownSearch.toLowerCase())
   );
 
+  // Count available charts
+  const availableChartsCount = Object.values(chartsData).filter(data => data !== null).length;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Section */}
-      <div className="bg-white border-b border-gray-200 shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center space-x-3">
-          <span className="text-4xl">📈</span>
-          <h1 className="text-xl font-semibold text-gray-900">Release Progress Insights</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Enhanced Header Section */}
+      <div className="bg-white border-b border-gray-200 shadow-lg h-20 flex items-center justify-between px-6 lg:px-8">
+        <div className="flex items-center space-x-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <span className="text-white text-2xl">📊</span>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Release Progress Insights</h1>
+            <p className="text-sm text-gray-600 font-medium">Comprehensive analytics across all release metrics</p>
+          </div>
         </div>
+        
+        {selectedProject && (
+          <div className="hidden lg:flex items-center space-x-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <span className="text-blue-700 font-semibold text-sm">Analyzing: {selectedProject.name}</span>
+          </div>
+        )}
       </div>
 
-      {/* Control Box */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mx-6 mt-6 mb-6 border border-gray-200">
-        <div className="flex items-center gap-3">
-          <span className="text-gray-700 text-sm font-medium">Projects</span>
-          
-          {/* Project Dropdown */}
-          <div ref={dropdownRef} className="relative" style={{ minWidth: '300px', maxWidth: '400px' }}>
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => {
-                  setShowDropdown(true);
-                  setDropdownSearch('');
-                }}
-                placeholder="NAM-KM"
-                className="w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedProject(null);
+      {/* Enhanced Control Box */}
+      <div className="bg-white rounded-2xl shadow-xl p-8 mx-6 mt-8 mb-8 border border-gray-200">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+          {/* Project Selection Section */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 text-lg">🏢</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Project Selection</h3>
+                <p className="text-sm text-gray-600">Choose a project to analyze release metrics</p>
+              </div>
+            </div>
+            
+            {/* Project Dropdown */}
+            <div ref={dropdownRef} className="relative" style={{ minWidth: '350px', maxWidth: '500px' }}>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onFocus={() => {
                     setShowDropdown(true);
                     setDropdownSearch('');
                   }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                  placeholder="Select or search for a project (e.g., NAM-KM)"
+                  className="w-full px-5 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-base font-medium shadow-sm"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedProject(null);
+                      setShowDropdown(true);
+                      setDropdownSearch('');
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              
+              {/* Enhanced Dropdown Menu */}
+              {showDropdown && (
+                <div className="absolute top-full mt-2 w-full bg-white border-2 border-gray-200 rounded-xl shadow-2xl max-h-80 overflow-hidden z-50">
+                  <div className="p-4 border-b border-gray-100 bg-gray-50">
+                    <input
+                      type="text"
+                      value={dropdownSearch}
+                      onChange={(e) => setDropdownSearch(e.target.value)}
+                      placeholder="Search projects..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="max-h-64 overflow-y-auto">
+                    {filteredProjects.length > 0 ? (
+                      filteredProjects.map((project) => (
+                        <div
+                          key={project.id}
+                          onClick={() => handleProjectSelect(project)}
+                          className="px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-50 last:border-b-0"
+                        >
+                          <div className="font-semibold text-gray-900 text-base mb-1">{project.name}</div>
+                          {project.zephyr_project_name && (
+                            <div className="text-sm text-gray-500 font-medium">{project.zephyr_project_name}</div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-6 py-12 text-gray-500 text-center">
+                        <div className="text-4xl mb-3">🔍</div>
+                        <div className="font-medium">No projects found</div>
+                        <div className="text-sm">Try adjusting your search terms</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-            
-            {/* Dropdown Menu */}
-            {showDropdown && (
-              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-80 overflow-hidden z-50">
-                <div className="p-2 border-b border-gray-100">
-                  <input
-                    type="text"
-                    value={dropdownSearch}
-                    onChange={(e) => setDropdownSearch(e.target.value)}
-                    placeholder="Search projects..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    autoFocus
-                  />
-                </div>
-                
-                <div className="max-h-60 overflow-y-auto">
-                  {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project) => (
-                      <div
-                        key={project.id}
-                        onClick={() => handleProjectSelect(project)}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer transition-colors"
-                      >
-                        <div className="font-medium text-gray-900 text-sm">{project.name}</div>
-                        {project.zephyr_project_name && (
-                          <div className="text-xs text-gray-500">{project.zephyr_project_name}</div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-8 text-gray-500 text-center text-sm">
-                      No projects found
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Measures Legend */}
-          <div className="flex items-center gap-4 ml-auto mr-8">
-            <span className="text-gray-600 text-sm">Measures</span>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-500 rounded-sm"></div>
-              <span className="text-sm text-gray-600">Count Distinct</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
-              <span className="text-sm text-gray-600">% diff by release</span>
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+            <span className="text-gray-700 text-base font-semibold">Analytics Legend</span>
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200">
+                <div className="w-4 h-4 bg-gradient-to-r from-orange-400 to-orange-600 rounded"></div>
+                <span className="text-sm font-semibold text-orange-700">Count Metrics</span>
+              </div>
+              <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                <div className="w-4 h-4 bg-gradient-to-r from-blue-400 to-blue-600 rounded"></div>
+                <span className="text-sm font-semibold text-blue-700">% Change</span>
+              </div>
             </div>
           </div>
 
-          {/* Insight Button */}
+          {/* Enhanced Insight Button */}
           <button
             onClick={handleInsightClick}
             disabled={!selectedProject || loading}
-            className={`px-6 py-2 rounded font-medium text-sm transition-all ${
+            className={`px-8 py-4 rounded-xl font-bold text-base transition-all duration-300 transform ${
               selectedProject && !loading
-                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl hover:scale-105'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
             {loading ? (
               <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Loading...
+                Analyzing...
               </div>
             ) : (
-              'Insight'
+              <div className="flex items-center">
+                <span className="mr-2">🔍</span>
+                Generate Insights
+              </div>
             )}
           </button>
         </div>
+        
+        {/* Progress indicator */}
+        {loading && (
+          <div className="mt-6 bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
+          </div>
+        )}
       </div>
 
-      {/* Charts Grid - Only show charts for available data */}
-      {(chartsData.userStories || chartsData.testCases) && (
-        <div className="px-6 pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* User Stories Chart */}
-            {chartsData.userStories && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div ref={userStoriesChartRef} style={{ width: '100%', height: '420px' }} />
-              </div>
-            )}
-            
-            {/* Test Cases Chart */}
-            {chartsData.testCases && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div ref={testCasesChartRef} style={{ width: '100%', height: '420px' }} />
-              </div>
-            )}
+      {/* Charts Grid - Enhanced Layout */}
+      {availableChartsCount > 0 && (
+        <div className="px-6 pb-12">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Analytics Dashboard</h2>
+            <p className="text-gray-600 font-medium">
+              Displaying {availableChartsCount} of {chartConfigs.length} available metrics for {selectedProject?.name}
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {chartConfigs.map((config) => (
+              chartsData[config.key] && (
+                <div key={config.key} className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                  <div ref={config.ref} style={{ width: '100%', height: '500px' }} />
+                </div>
+              )
+            ))}
           </div>
         </div>
       )}
 
-      {/* Empty State */}
-      {!chartsData.userStories && !chartsData.testCases && !loading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-20 mx-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-            <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Enhanced Empty State */}
+      {!loading && availableChartsCount === 0 && (
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-16 mx-6 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl mb-6">
+            <svg className="h-10 w-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <p className="text-gray-600">Select a project and click "Insight" to view release analytics</p>
+          <h3 className="text-2xl font-bold text-gray-900 mb-3">Ready to Analyze</h3>
+          <p className="text-gray-600 text-lg mb-6 max-w-md mx-auto">
+            Select a project and click "Generate Insights" to view comprehensive release analytics across all metrics
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-4xl mx-auto">
+            {chartConfigs.map((config) => (
+              <div key={config.key} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="text-2xl mb-2">{config.icon}</div>
+                <div className="text-sm font-semibold text-gray-700">{config.title.replace(' by Release', '')}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
