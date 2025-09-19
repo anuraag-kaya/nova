@@ -26,7 +26,7 @@ const ProgressInsights = () => {
   const usersChartRef = useRef(null);
   const testStepsChartRef = useRef(null);
 
-  // Chart configurations
+  // Chart configurations with Google color palette
   const chartConfigs = [
     {
       key: 'userStories',
@@ -34,7 +34,7 @@ const ProgressInsights = () => {
       title: 'User Stories by Release',
       yAxisName: 'User Stories Count',
       seriesName: 'User Stories',
-      color: '#3B82F6',
+      color: '#0F71F2', // Google Blue
       valueKey: 'story_count',
       unit: 'stories',
       ref: userStoriesChartRef,
@@ -46,7 +46,7 @@ const ProgressInsights = () => {
       title: 'Test Cases by Release',
       yAxisName: 'Test Cases Count',
       seriesName: 'Test Cases',
-      color: '#10B981',
+      color: '#318C07', // Google Green
       valueKey: 'test_case_count',
       unit: 'test cases',
       ref: testCasesChartRef,
@@ -58,7 +58,7 @@ const ProgressInsights = () => {
       title: 'Defects by Release',
       yAxisName: 'Defects Count',
       seriesName: 'Defects',
-      color: '#EF4444',
+      color: '#D92929', // Google Red
       valueKey: 'defect_count',
       unit: 'defects',
       ref: defectsChartRef,
@@ -70,7 +70,7 @@ const ProgressInsights = () => {
       title: 'Incidents by Release',
       yAxisName: 'Incidents Count',
       seriesName: 'Incidents',
-      color: '#F59E0B',
+      color: '#F2A20C', // Google Yellow
       valueKey: 'inc_count',
       unit: 'incidents',
       ref: incidentsChartRef,
@@ -82,7 +82,7 @@ const ProgressInsights = () => {
       title: 'Users by Release',
       yAxisName: 'Users Count',
       seriesName: 'Users',
-      color: '#8B5CF6',
+      color: '#868686', // Google Gray
       valueKey: 'user_count',
       unit: 'users',
       ref: usersChartRef,
@@ -94,7 +94,7 @@ const ProgressInsights = () => {
       title: 'Test Steps by Release',
       yAxisName: 'Test Steps Count',
       seriesName: 'Test Steps',
-      color: '#06B6D4',
+      color: '#9334E6', // Google Purple (complementary to the palette)
       valueKey: 'test_step_count',
       unit: 'test steps',
       ref: testStepsChartRef,
@@ -645,8 +645,8 @@ const ProgressInsights = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {chartConfigs.map((config) => (
               chartsData[config.key] && (
-                <div key={config.key} className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                  <div ref={config.ref} style={{ width: '100%', height: '500px' }} />
+                <div key={config.key} className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                  <div ref={config.ref} style={{ width: '100%', height: '550px' }} />
                 </div>
               )
             ))}
